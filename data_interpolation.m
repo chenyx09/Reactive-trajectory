@@ -1,8 +1,8 @@
-function [veh_traj_set,frames]=data_interpolation(t_min,t_max,data)
+function [veh_traj_set,frames]=data_interpolation(data,t_min,t_max,minT)
 global N_bezier
 Ts=0.1;
 f2m = 0.3048;
-seg = data(data.Global_Time>=t_min-2000&data.Global_Time<=t_max+2000,:);
+seg = data(data.Global_Time>=t_min&data.Global_Time<=t_max,:);
 vehicle_set = unique(seg.Vehicle_ID);
 Vehicle_ID=[];
 Local_X=[];
@@ -62,7 +62,7 @@ else
     T=0;
 end
 
-if seg1.v_Class(1)==2 && seg1.Global_Time(1)<=t_min && seg1.Global_Time(end)>=t_max &&~isempty(tt)
+if seg1.v_Class(1)==2 && seg1.Global_Time(end)-seg1.Global_Time(1)>=minT*1000 &&~isempty(tt)
     veh_traj.Vehicle_ID = seg1.Vehicle_ID(1);
     veh_traj.t = [seg1.Global_Time(1),seg1.Global_Time(end)-seg1.Global_Time(1)];
     if seg1.Global_Time(1)<t_min

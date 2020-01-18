@@ -1,8 +1,8 @@
 [a,b]=hist(data.Global_Time,unique(data.Global_Time));
 c=sortrows([a' b],1,'descend');
-t = c(1,2);
-t_min = c(n,2)-4*1000;
-t_max = c(n,2)+4*1000;
+t = c(5,2);
+t_min = c(n,2)-10*1000;
+t_max = c(n,2)+10*1000;
 t_sample = t+(0:Ts1:TT)*1000;
 [veh_traj_set,frames]=data_interpolation(t_min,t_max,data);
 for i=1:length(frames)
@@ -11,7 +11,13 @@ end
 
 
 %% draw
-idx = 5;
+for n = 2:20
+duration = zeros(length(veh_traj_set),1);
+for i=1:length(veh_traj_set)
+        duration(i) = veh_traj_set(i).t(2);
+end
+[aa,bb]=sort(duration,'descend');
+idx = bb(n);
 lm = linspace(0,21.6,7);
 f2m = 0.3048;
 
@@ -39,9 +45,10 @@ hold on
     ego_x = entry.Local_X;
     ego_v0 = entry.v_Vel;
     aff1 = table2array(affordance_set1{i}(affordance_set1{i}.Vehicle_ID==veh_ID,:));
-    aff2 = table2array(affordance_set1{i}(affordance_set1{i-2}.Vehicle_ID==veh_ID,:));
-    a1 = aff1([2,3,4,6,7,9,10,11,12,14,15])./x_norm;
-    a2 = aff2([2,3,4,6,7,9,10,11,12,14,15])./x_norm;
+    aff2 = table2array(affordance_set1{i-2}(affordance_set1{i-2}.Vehicle_ID==veh_ID,:));
+    try
+    a1 = aff1([2,3,4,6,7,9,10,11,12,14,15])'./x_norm';
+    a2 = aff2([2,3,4,6,7,9,10,11,12,14,15])'./x_norm';
     pred = traj_predictor(a1,a2);
     
     
@@ -58,14 +65,16 @@ hold on
             plot(traj_base(j,m+1:2*m)+ego_x,ego_y+traj_base(j,1:m)+ego_v0*(0:m-1)*Ts1,'m--');
         end
     end
+    possible_set = find(pred>0)
     
     for k=1:length(lm)
-        plot([lm(k),lm(k)],[ego_y-7,ego_y+50],'r--')
+        plot([lm(k),lm(k)],[ego_y-7,ego_y+80],'r--')
     end
-    axis([0,21.6,ego_y-7,ego_y+50])
+    axis([0,21.6,ego_y-7,ego_y+80])
     axis equal
-    pause(0.1)
+    pause(0.05)
+    end
 end
-
+end
 
 

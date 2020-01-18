@@ -1,6 +1,6 @@
 function TTC = check_collision(cur_affordance,prev_affordance,traj,delta_t,T)
-%  frame.Vehicle_ID(i) frame.v_Vel(i) dis2cen fwd_dis rear_dis left_free_lb left_free_ub...
-%                    left_free_fwd right_free_lb right_free_ub right_free_fwd
+%   'Vehicle_ID','v_Vel','dis2cen','fwd_dis','rear_dis','left_free_lb','left_free_ub','left_free_fwd',...
+%   'left_dis_front','left_dis_rear','right_free_lb','right_free_ub','right_free_fwd','right_dis_front','right_dis_rear'
 if nargin<4
     delta_t = 0.1;
 end
@@ -9,14 +9,10 @@ Ts1 = 0.5;
 if nargin<5
     T = (m-1)*Ts1;
 end
-
-
-
-
 L = 5;
 W = 2.6;
-buffer_x = 0.1;
-buffer_y = 0.3;
+buffer_x = 0.2;
+buffer_y = 0.8;
 dis2cen = cur_affordance(3);
 TTC = inf;
 tt = (0:m-1)*Ts1;
@@ -96,28 +92,32 @@ for i=1:m
         TTC = (i-1)*Ts1;
         break
     end
+    if i>=2&&abs(x_traj(i)-x_traj(i-1))/abs(y_traj(i)-y_traj(i-1))>0.3
+        TTC = 0;
+        break
+    end
 end
 
 
-% if TTC<2
-%     
-%     figure(1)
-%     clf
-%     hold on
-%     draw_rec([x_traj(i),y_traj(i)-L/2],[W L],0,'b');
-%     draw_rec([0,fwd_traj(i)+2.5],[3.6 5],0,'r');
-%     draw_rec([left_front_X-W/2,left_ahead_traj(i)+2.5],[W 5],0,'r');
-%     draw_rec([left_rear_X-W/2,left_rear_traj(i)-2.5],[W 5],0,'r');
-%     draw_rec([-3.6,left_fwd_traj(i)+2.5],[3.6 5],0,'r');
-%     
-%     draw_rec([right_front_X+W/2,right_ahead_traj(i)+2.5],[W 5],0,'r');
-%     draw_rec([right_rear_X+W/2,right_rear_traj(i)-2.5],[W 5],0,'r');
-%     draw_rec([3.6,right_fwd_traj(i)+2.5],[3.6 5],0,'r');
-%     plot([-1.8,-1.8],[y_traj(i)-7,y_traj(i)+7])
-%     plot([1.8,1.8],[y_traj(i)-7,y_traj(i)+7])
-%     axis equal
-%     if abs(x_traj(i))>2
-%         disp('')
-%     end
-% end
+if TTC<2
+    
+    figure(1)
+    clf
+    hold on
+    draw_rec([x_traj(i),y_traj(i)-L/2],[W L],0,'b');
+    draw_rec([0,fwd_traj(i)+2.5],[3.6 5],0,'r');
+    draw_rec([left_front_X-W/2,left_ahead_traj(i)+2.5],[W 5],0,'r');
+    draw_rec([left_rear_X-W/2,left_rear_traj(i)-2.5],[W 5],0,'r');
+    draw_rec([-3.6,left_fwd_traj(i)+2.5],[3.6 5],0,'r');
+    
+    draw_rec([right_front_X+W/2,right_ahead_traj(i)+2.5],[W 5],0,'r');
+    draw_rec([right_rear_X+W/2,right_rear_traj(i)-2.5],[W 5],0,'r');
+    draw_rec([3.6,right_fwd_traj(i)+2.5],[3.6 5],0,'r');
+    plot([-1.8,-1.8],[y_traj(i)-7,y_traj(i)+7])
+    plot([1.8,1.8],[y_traj(i)-7,y_traj(i)+7])
+    axis equal
+    if abs(x_traj(i))>2
+        disp('')
+    end
+end
 

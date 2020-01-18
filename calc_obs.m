@@ -11,15 +11,16 @@ for i=1:size(frame,1)
     lb = ub - frame.v_length(i);
     left_X = frame.Local_X(i)-frame.v_Width(i)/2;
     right_X = frame.Local_X(i)+frame.v_Width(i)/2;
-    obs{lane_ID}=[obs{lane_ID};lb ub left_X right_X];
+    v_vel =frame.v_Vel(i);
+    obs{lane_ID}=[obs{lane_ID};lb ub left_X right_X v_vel];
 end
 for i=1:n_lanes
     if ~isempty(obs{i})
         obs{i}=sortrows(obs{i},1);
     end
 end
-for i=1:n_lanes
-    if isempty(obs{i})
-        obs{i}=[-100 -99 i*3.6-1.8-0.9 i*3.6-1.8+0.9];
-    end
-end
+% for i=1:n_lanes
+%     if isempty(obs{i})
+%         obs{i}=[-100 -99 i*3.6-1.8-0.9 i*3.6-1.8+0.9 0];
+%     end
+% end
