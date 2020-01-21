@@ -1,4 +1,6 @@
+from __future__ import print_function
 import torch
+import argparse
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,120 +8,78 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 from scipy.io import loadmat
+from torch.utils import data
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-# Data Generation
-class Model(nn.Module):
 
-    def __init__(self, embedding_size, num_numerical_cols, output_size, layers, p=0.4):
+class FCNet(nn.Module):
+    def __init__(self, hidden_1=30, hidden_2=30 ,op_dim=30, input_dim=21):
         super().__init__()
-        if embedding_size>0:
-            self.all_embeddings = nn.ModuleList([nn.Embedding(ni, nf) for ni, nf in embedding_size])
-            self.embedding_dropout = nn.Dropout(p)
-        self.batch_norm_num = nn.BatchNorm1d(num_numerical_cols)
+        self.fc1 = nn.Linear(input_dim, hidden_1)
+        self.fc2 = nn.Linear(hidden_2, op_dim)
+        self.bn1 = nn.BatchNorm1d(hidden_1)
 
-        all_layers = []
-        if embedding_size>0:
-            num_categorical_cols = sum((nf for ni, nf in embedding_size))
-        else:
-            num_categorical_cols = 0
-        input_size = num_categorical_cols + num_numerical_cols
+    def forward(self, x):
+        output = F.relu(self.bn1(self.fc1(x)))
+        output = self.fc2(output)
+        output = F.log_softmax(output, dim=1)
+        return output
 
-        for i in layers:
-            all_layers.append(nn.Linear(input_size, i))
-            all_layers.append(nn.ReLU(inplace=True))
-            all_layers.append(nn.BatchNorm1d(i))
-            all_layers.append(nn.Dropout(p))
-            input_size = i
-
-        all_layers.append(nn.Linear(layers[-1], output_size))
-
-        self.layers = nn.Sequential(*all_layers)
-
-    def forward(self, x_categorical, x_numerical):
-        embeddings = []
-        if hasattr(self,'all_embeddings'):
-            for i,e in enumerate(self.all_embeddings):
-                embeddings.append(e(x_categorical[:,i]))
-            x = torch.cat(embeddings, 1)
-            x = self.embedding_dropout(x)
-        else:
-            x=torch.tensor([], dtype=torch.float)
-
-        x_numerical = self.batch_norm_num(x_numerical)
-        x = torch.cat([x, x_numerical], 1)
-        x = self.layers(x)
-        return x
-
-x = loadmat('data.mat')
-data = x['training_data']
-output = x['output']
-weight = torch.zeros(output.shape[0],output.shape[1])
-for i in range(0,output.shape[0]):
-    for j in range(0,output.shape[1]):
-        if output[i,j]==1:
-            weight[i,j]=100
-        elif output[i,j]==-1:
-            weight[i,j]==1
-
-total_records = data.shape[0]
-M = output.shape[1]
-
-
-
-
-
-numerical_data = torch.tensor(data, dtype=torch.float)
-
-outputs = torch.tensor(output, dtype=torch.int64)
-
-
-
-
-
-test_records = int(total_records * .2)
-
-# categorical_train_data = categorical_data[:total_records-test_records]
-# categorical_test_data = categorical_data[total_records-test_records:total_records]
-# numerical_train_data = numerical_data[:total_records-test_records]
-# numerical_test_data = numerical_data[total_records-test_records:total_records]
-# train_outputs = outputs[:total_records-test_records]
-# test_outputs = outputs[total_records-test_records:total_records]
-
-
-model = Model(0, numerical_data.shape[1], M, [200,100,50,50], p=0.4)
-# loss_function = nn.CrossEntropyLoss()
-def loss_function(X,Y):
+def loss_function(X,Y, weight):
     return torch.norm(weight*(X-Y)**2)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-# def loss_function(X,Y):
-#     return torch.mean((5000*Y+(1-Y))*torch.abs(X-Y))
-#     # +torch.dot(torch.ones(Y.shape[0],dtype=torch.int64)-Y,torch.abs(X-Y))
+def train(args, model, device, train_loader, optimizer, epoch, weight):
+    for batch_idx, (input, target) in enumerate(train_loader):
+        input, target = input.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(input)
+        loss = loss_function(target, output, weight)
+        loss.backward()
+        optimizer.step()
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * len(input), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), loss.item()))
 
-epochs = 10000
-aggregated_losses = []
-empty_tensor = torch.tensor([], dtype=torch.int64)
 
-for i in range(epochs):
-    i += 1
-    y_pred = model(empty_tensor, numerical_data)
 
-    single_loss = loss_function(y_pred, outputs)
-    aggregated_losses.append(single_loss)
+def main():
+    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 
-    if i%40 == 0:
-        print(y_pred)
-        print(f'epoch: {i:3} loss: {single_loss.item():10.8f}')
+    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                        help='how many batches to wait before logging training status')
+    args = parser.parse_args()
 
-    optimizer.zero_grad()
-    single_loss.backward()
-    optimizer.step()
+    x = loadmat('data.mat')
+    affordance_data = x['training_data'][:100]
+    output = x['output'][:100]
+    weight = torch.zeros(output.shape[0],output.shape[1])
+    for i in range(0,output.shape[0]):
+        for j in range(0,output.shape[1]):
+            if output[i,j]==1:
+                weight[i,j]=100
+            elif output[i,j]==-1:
+                weight[i,j]==1
 
-print(f'epoch: {i:3} loss: {single_loss.item():10.10f}')
+    affordance_data = torch.Tensor(affordance_data)
+    output = torch.Tensor(output)
+    output_shape = output.shape[1]
 
-plt.plot(range(epochs), aggregated_losses)
-plt.ylabel('Loss')
-plt.xlabel('epoch');
+    model = FCNet(op_dim=output_shape).to(device)
+    affordance_dataset = data.TensorDataset(affordance_data, output)
+    affordance_dataloader = data.DataLoader(affordance_dataset,
+                                            batch_size = 128)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    epoch = 0
+
+    train(args=args, model=model, device=device, train_loader=affordance_dataloader,
+          optimizer=optimizer, epoch=epoch, weight=weight)
+
+
+
+
+if __name__ == '__main__':
+    main()
