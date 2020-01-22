@@ -98,7 +98,6 @@ def main():
     val_loader =   data.DataLoader(val_data, batch_size = 128)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    epoch = 0
     for epoch in range(args.num_epochs):
 
         train(args=args, model=model, device=device, train_loader=train_loader,
