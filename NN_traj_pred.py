@@ -65,19 +65,19 @@ def main():
 
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--data-path', type='str', default='data.mat',
+    parser.add_argument('--data-path', type=str, default='data.mat',
                         metavar='D', help='.mat file from which to read data')
-    parser.add_argument('--num-epochs',type='int', default=10,
+    parser.add_argument('--num-epochs',type=int, default=10,
                         help='number of epochs to train')
     args = parser.parse_args()
 
     x = loadmat(args.data_path)
-    affordance_data = x['training_data']
-    output = x['output']
-
+    affordance_data = x['training_data'][:100]
+    output = x['output'][:100]
 
     affordance_data = torch.Tensor(affordance_data)
-    output = torch.Tensor(output).type(torch.LongTensor)
+    output = torch.Tensor(output)
+
     output_shape = output.shape[1]
 
     model = FCNet(op_dim=output_shape).to(device)
@@ -99,7 +99,6 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     for epoch in range(args.num_epochs):
-
         train(args=args, model=model, device=device, train_loader=train_loader,
               optimizer=optimizer, epoch=epoch)
         test(args=args, model=model, device=device, test_loader=val_loader,
