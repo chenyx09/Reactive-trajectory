@@ -27,15 +27,17 @@ class FCNet(nn.Module):
         output = F.log_softmax(output, dim=1)
         return output
 
-def loss_function(X,Y, weight):
-    return torch.norm(weight*(X-Y)**2)
+def loss_function(X,Y):
+    coeff = 100*(Y==1) + 1*(Y==-1)
+    ### TODO: Need to do normalize across the batch or something?
+    return torch.norm(coeff*(X-Y)**2)
 
-def train(args, model, device, train_loader, optimizer, epoch, weight):
+def train(args, model, device, train_loader, optimizer, epoch):
     for batch_idx, (input, target) in enumerate(train_loader):
         input, target = input.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(input)
-        loss = loss_function(target, output, weight)
+        loss = loss_function(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
@@ -44,39 +46,65 @@ def train(args, model, device, train_loader, optimizer, epoch, weight):
                 100. * batch_idx / len(train_loader), loss.item()))
 
 
+def test(args, model, device, test_loader, epoch):
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        for input, target in test_loader:
+            input, target = input.to(device), target.to(device)
+            output = model(input)
+            test_loss += loss_function(output, target).item()  # sum up batch loss
+            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+
+    test_loss /= len(test_loader.dataset)
+    print('\nTest set: Average loss: {:.4f}'.format(test_loss))
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--data-path', type='str', default='data.mat',
+                        metavar='D', help='.mat file from which to read data')
+    parser.add_argument('--num-epochs',type='int', default=10,
+                        help='number of epochs to train')
     args = parser.parse_args()
 
-    x = loadmat('data.mat')
-    affordance_data = x['training_data'][:100]
-    output = x['output'][:100]
-    weight = torch.zeros(output.shape[0],output.shape[1])
-    for i in range(0,output.shape[0]):
-        for j in range(0,output.shape[1]):
-            if output[i,j]==1:
-                weight[i,j]=100
-            elif output[i,j]==-1:
-                weight[i,j]==1
+    x = loadmat(args.data_path)
+    affordance_data = x['training_data']
+    output = x['output']
+
 
     affordance_data = torch.Tensor(affordance_data)
-    output = torch.Tensor(output)
+    output = torch.Tensor(output).type(torch.LongTensor)
     output_shape = output.shape[1]
 
     model = FCNet(op_dim=output_shape).to(device)
     affordance_dataset = data.TensorDataset(affordance_data, output)
-    affordance_dataloader = data.DataLoader(affordance_dataset,
-                                            batch_size = 128)
+
+    train_data_size = int(0.85*len(affordance_dataset))
+    test_data_size = int(0.1*len(affordance_dataset))
+    val_data_size = len(affordance_dataset) - train_data_size - test_data_size
+
+    #### Use 3 splits if needed by changing here
+    train_data, val_data = torch.utils.data.random_split(affordance_dataset,
+                                                            [train_data_size,
+                                                            val_data_size +
+                                                            test_data_size])
+
+
+    train_loader = data.DataLoader(train_data, batch_size = 128)
+    val_loader =   data.DataLoader(val_data, batch_size = 128)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epoch = 0
+    for epoch in range(args.num_epochs):
 
-    train(args=args, model=model, device=device, train_loader=affordance_dataloader,
-          optimizer=optimizer, epoch=epoch, weight=weight)
+        train(args=args, model=model, device=device, train_loader=train_loader,
+              optimizer=optimizer, epoch=epoch)
+        test(args=args, model=model, device=device, test_loader=val_loader,
+        epoch=epoch)
 
 
 
