@@ -15,7 +15,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class FCNet(nn.Module):
-    def __init__(self, hidden_1=30, hidden_2=30 ,op_dim=30, input_dim=21):
+    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=30, input_dim=21):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_2, op_dim)
@@ -24,7 +24,7 @@ class FCNet(nn.Module):
     def forward(self, x):
         output = F.relu(self.bn1(self.fc1(x)))
         output = self.fc2(output)
-        output = F.log_softmax(output, dim=1)
+        # output = F.log_softmax(output, dim=1)
         return output
 
 def loss_function(X,Y):
@@ -72,8 +72,8 @@ def main():
     args = parser.parse_args()
 
     x = loadmat(args.data_path)
-    affordance_data = x['training_data'][:100]
-    output = x['output'][:100]
+    affordance_data = x['training_data']
+    output = x['output']
 
     affordance_data = torch.Tensor(affordance_data)
     output = torch.Tensor(output)
@@ -98,6 +98,8 @@ def main():
     val_loader =   data.DataLoader(val_data, batch_size = 128)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    test(args=args, model=model, device=device, test_loader=val_loader,
+        epoch=0)
     for epoch in range(args.num_epochs):
         train(args=args, model=model, device=device, train_loader=train_loader,
               optimizer=optimizer, epoch=epoch)
