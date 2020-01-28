@@ -15,22 +15,43 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class FCNet(nn.Module):
-    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=30, input_dim=21):
+    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=17, input_dim=21):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_2, op_dim)
+        self.fc3 = nn.Sigmoid()
         self.bn1 = nn.BatchNorm1d(hidden_1)
 
     def forward(self, x):
         output = F.relu(self.bn1(self.fc1(x)))
         output = self.fc2(output)
+        output = self.fc3(output)
+        # output = F.log_softmax(output, dim=1)
+        return output
+
+class FCNet_new(nn.Module):
+    def __init__(self, hidden_11=100, hidden_12=100, hidden_2=200, op_dim=17, input_dim=21):
+        super().__init__()
+        self.fc11 = nn.Linear(input_dim, hidden_11)
+        self.fc12 = nn.Linear(input_dim, hidden_12)
+        self.fc2 = nn.Linear(hidden_2, op_dim)
+        self.fc3 = nn.Sigmoid()
+        self.bn1 = nn.BatchNorm1d(hidden_11)
+        self.bn2 = nn.BatchNorm1d(hidden_12)
+
+    def forward(self, x):
+        hidden11 = F.relu(self.bn1(self.fc11(x)))
+        hidden12 = F.tanh(self.bn2(self.fc12(x)))
+        output = self.fc2(torch.cat([hidden11, hidden12], 1))
+        output = self.fc3(output)
         # output = F.log_softmax(output, dim=1)
         return output
 
 def loss_function(X,Y):
-    coeff = 100*(Y==1) + 1*(Y==-1)
+    coeff = 100*(Y==1) + 5*(Y==0.0)+0.1*(Y==0.01)
     ### TODO: Need to do normalize across the batch or something?
-    return torch.norm(coeff*(X-Y)**2)
+    # return torch.norm(coeff*(X-Y)**2)
+    return torch.norm(coeff*(Y*torch.log(X+0.01)+(1.0-Y)*torch.log(1.01-X)))
 
 def train(args, model, device, train_loader, optimizer, epoch):
     for batch_idx, (input, target) in enumerate(train_loader):
@@ -60,6 +81,12 @@ def test(args, model, device, test_loader, epoch):
     test_loss /= len(test_loader.dataset)
     print('\nTest set: Average loss: {:.4f}'.format(test_loss))
 
+
+def calc_offset(model,data,target):
+    output = model(data)
+    pos_output = (target==1)*output + 10*(target!=1)
+    offset,indices = pos_output.min(0)
+    return offset
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 
@@ -67,20 +94,20 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--data-path', type=str, default='data.mat',
                         metavar='D', help='.mat file from which to read data')
-    parser.add_argument('--num-epochs',type=int, default=10,
+    parser.add_argument('--num-epochs',type=int, default=50,
                         help='number of epochs to train')
     args = parser.parse_args()
 
     x = loadmat(args.data_path)
     affordance_data = x['training_data']
     output = x['output']
-
+    output1 = output+0.01*(output==0)+(output==-1)
     affordance_data = torch.Tensor(affordance_data)
-    output = torch.Tensor(output)
+    output = torch.Tensor(output1)
 
     output_shape = output.shape[1]
 
-    model = FCNet(op_dim=output_shape).to(device)
+    model = FCNet_new(op_dim=output_shape).to(device)
     affordance_dataset = data.TensorDataset(affordance_data, output)
 
     train_data_size = int(0.85*len(affordance_dataset))
@@ -94,10 +121,13 @@ def main():
                                                             test_data_size])
 
 
-    train_loader = data.DataLoader(train_data, batch_size = 128)
-    val_loader =   data.DataLoader(val_data, batch_size = 128)
+    train_loader = data.DataLoader(train_data, batch_size = 512)
+    val_loader =   data.DataLoader(val_data, batch_size = 512)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    model = torch.load('traj_pred')
+    # offset = calc_offset(model,affordance_data,output)
+    # print(offset)
     test(args=args, model=model, device=device, test_loader=val_loader,
         epoch=0)
     for epoch in range(args.num_epochs):
@@ -105,6 +135,7 @@ def main():
               optimizer=optimizer, epoch=epoch)
         test(args=args, model=model, device=device, test_loader=val_loader,
         epoch=epoch)
+    torch.save(model, 'traj_pred')
 
 
 

@@ -128,25 +128,25 @@ for i=1:m
 end
 
 
-if TTC<2
-    
-    figure(1)
-    clf
-    hold on
-    draw_rec([x_traj(i),y_traj(i)-L/2],[W L],0,'b');
-    draw_rec([0,fwd_traj(i)+2.5],[3.6 5],0,'r');
-    draw_rec([dis2cen-left_front_X-W/2,left_front_traj(i)+2.5],[W 5],0,'r');
-    draw_rec([dis2cen-left_rear_X-W/2,left_rear_traj(i)-2.5],[W 5],0,'r');
-
-    
-    draw_rec([dis2cen+right_front_X+W/2,right_front_traj(i)+2.5],[W 5],0,'r');
-    draw_rec([dis2cen+right_rear_X+W/2,right_rear_traj(i)-2.5],[W 5],0,'r');
-
-    plot([-1.8,-1.8],[y_traj(i)-7,y_traj(i)+7])
-    plot([1.8,1.8],[y_traj(i)-7,y_traj(i)+7])
-    axis equal
-    if abs(x_traj(i))>2
-        disp('')
-    end
-end
+% if TTC<2
+%     
+%     figure(1)
+%     clf
+%     hold on
+%     draw_rec([x_traj(i),y_traj(i)-L/2],[W L],0,'b');
+%     draw_rec([0,fwd_traj(i)+2.5],[3.6 5],0,'r');
+%     draw_rec([dis2cen-left_front_X-W/2,left_front_traj(i)+2.5],[W 5],0,'r');
+%     draw_rec([dis2cen-left_rear_X-W/2,left_rear_traj(i)-2.5],[W 5],0,'r');
+% 
+%     
+%     draw_rec([dis2cen+right_front_X+W/2,right_front_traj(i)+2.5],[W 5],0,'r');
+%     draw_rec([dis2cen+right_rear_X+W/2,right_rear_traj(i)-2.5],[W 5],0,'r');
+% 
+%     plot([-1.8,-1.8],[y_traj(i)-7,y_traj(i)+7])
+%     plot([1.8,1.8],[y_traj(i)-7,y_traj(i)+7])
+%     axis equal
+%     if abs(x_traj(i))>2
+%         disp('')
+%     end
+% end
 
