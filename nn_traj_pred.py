@@ -24,10 +24,10 @@ class FCNet(nn.Module):
 
     def forward(self, x):
         output = F.relu(self.bn1(self.fc1(x)))
-        output = self.fc2(output)
-        output = self.fc3(output)
+        output1 = self.fc2(output1)
+        output2 = self.fc3(output2)
         # output = F.log_softmax(output, dim=1)
-        return output
+        return output1, output2
 
 class FCNet_new(nn.Module):
     def __init__(self, hidden_11=100, hidden_12=100, hidden_2=200, op_dim=17, input_dim=21):
@@ -35,17 +35,16 @@ class FCNet_new(nn.Module):
         self.fc11 = nn.Linear(input_dim, hidden_11)
         self.fc12 = nn.Linear(input_dim, hidden_12)
         self.fc2 = nn.Linear(hidden_2, op_dim)
-        self.fc3 = nn.Sigmoid()
         self.bn1 = nn.BatchNorm1d(hidden_11)
         self.bn2 = nn.BatchNorm1d(hidden_12)
 
     def forward(self, x):
         hidden11 = F.relu(self.bn1(self.fc11(x)))
         hidden12 = F.tanh(self.bn2(self.fc12(x)))
-        output = self.fc2(torch.cat([hidden11, hidden12], 1))
-        output = self.fc3(output)
+        op= self.fc2(torch.cat([hidden11, hidden12], 1))
+        output = F.sigmoid(op)
         # output = F.log_softmax(output, dim=1)
-        return output
+        return output, op, hidden11, hidden12
 
 def loss_function(X,Y):
     coeff = 100*(Y==1) + 5*(Y==0.0)+0.1*(Y==0.01)
@@ -54,10 +53,11 @@ def loss_function(X,Y):
     return torch.norm(coeff*(Y*torch.log(X+0.01)+(1.0-Y)*torch.log(1.01-X)))
 
 def train(args, model, device, train_loader, optimizer, epoch):
+    model.train()
     for batch_idx, (input, target) in enumerate(train_loader):
         input, target = input.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(input)
+        output = model(input)[0]
         loss = loss_function(output, target)
         loss.backward()
         optimizer.step()
@@ -74,7 +74,7 @@ def test(args, model, device, test_loader, epoch):
     with torch.no_grad():
         for input, target in test_loader:
             input, target = input.to(device), target.to(device)
-            output = model(input)
+            output = model(input)[0]
             test_loss += loss_function(output, target).item()  # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
 
@@ -83,7 +83,7 @@ def test(args, model, device, test_loader, epoch):
 
 
 def calc_offset(model,data,target):
-    output = model(data)
+    output = model(data)[0]
     pos_output = (target==1)*output + 10*(target!=1)
     offset,indices = pos_output.min(0)
     return offset
@@ -125,7 +125,7 @@ def main():
     val_loader =   data.DataLoader(val_data, batch_size = 512)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    model = torch.load('traj_pred')
+    #model.load_state_dict(torch.load('traj_pred.pth'))
     # offset = calc_offset(model,affordance_data,output)
     # print(offset)
     test(args=args, model=model, device=device, test_loader=val_loader,
@@ -135,7 +135,12 @@ def main():
               optimizer=optimizer, epoch=epoch)
         test(args=args, model=model, device=device, test_loader=val_loader,
         epoch=epoch)
-    torch.save(model, 'traj_pred')
+    torch.save(model, 'traj_pred.pth')
+
+
+
+    ## Get output before sigmoid
+    # new_classifier = nn.Sequential(*list(model.classifier.children())[:-1])
 
 
 
