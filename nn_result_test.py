@@ -2,6 +2,8 @@ from __future__ import print_function
 import torch
 import argparse
 import torchvision.transforms as transforms
+import matplotlib
+# matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
@@ -16,48 +18,54 @@ from torch.utils import data
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
 T = 3.
 Ts = 0.5
 m = int(T/Ts+1)
 
 idx = [2,3,4,5,8,9,10,11,12,13,14,15,16,17,18,19,24,25,26,27,28]
 lm = [0,3.6,7.2,10.8,14.4,18,21.6]
+x = loadmat('offset.mat')
+offset = x['offset'][0]
+x = loadmat('SVM_res.mat')
+w_val=x['w_val']
 
 class FCNet(nn.Module):
-    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=30, input_dim=21):
+    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=17, input_dim=21):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_2, op_dim)
         self.fc3 = nn.Sigmoid()
         self.bn1 = nn.BatchNorm1d(hidden_1)
+
     def forward(self, x):
         output = F.relu(self.bn1(self.fc1(x)))
-        output = self.fc2(output)
-        output = 2*self.fc3(output)-1
+        output1 = self.fc2(output)
+        output2 = self.fc3(output1)
         # output = F.log_softmax(output, dim=1)
-        return output
+        return output2, output
 
 class FCNet_new(nn.Module):
-    def __init__(self, hidden_11=100, hidden_12=100, hidden_2=200, op_dim=17, input_dim=21):
+    def __init__(self, hidden_1=100, hidden_2=50, op_dim=17, input_dim=21):
         super().__init__()
-        self.fc11 = nn.Linear(input_dim, hidden_11)
-        self.fc12 = nn.Linear(input_dim, hidden_12)
-        self.fc2 = nn.Linear(hidden_2, op_dim)
-        self.fc3 = nn.Sigmoid()
-        self.bn1 = nn.BatchNorm1d(hidden_11)
-        self.bn2 = nn.BatchNorm1d(hidden_12)
-
+        self.fc1 = nn.Linear(input_dim, hidden_1)
+        self.fc2 = nn.Linear(hidden_1, hidden_2)
+        self.fc3 = nn.Linear(hidden_2, op_dim)
+        self.fc4 = nn.Sigmoid()
+        self.bn1 = nn.BatchNorm1d(hidden_1)
+        self.bn2 = nn.BatchNorm1d(hidden_2)
     def forward(self, x):
-        hidden11 = F.relu(self.bn1(self.fc11(x)))
-        hidden12 = F.tanh(self.bn2(self.fc12(x)))
-        output = self.fc2(torch.cat([hidden11, hidden12], 1))
-        output = self.fc3(output)
+        output = F.relu(self.bn1(self.fc1(x)))
+        output = F.relu(self.bn2(self.fc2(output)))
+        output1 = self.fc3(output)
+        output2 = self.fc4(output1)
         # output = F.log_softmax(output, dim=1)
-        return output
+        return output2, output
 
 
 def animate_scenario(veh_ID,t_min,t_max,frames,lm,aff,traj_base,model):
     fig = plt.figure()
+    plt.xlim(0, 21.6)
     ax = fig.add_subplot(111)
     plt.grid()
     nframe = int((t_max-t_min)/100)
@@ -106,31 +114,36 @@ def animate_scenario(veh_ID,t_min,t_max,frames,lm,aff,traj_base,model):
         affordance = aff[t_idx][np.where(aff[t_idx][:,0]==veh_ID)][0]
         affordance = affordance[1:]
         # print(affordance)
-        pred = model(torch.tensor([affordance],dtype=torch.float32))[0].tolist()
+        pred = model(torch.tensor([affordance],dtype=torch.float32))[0][0].tolist()
+        feature = model(torch.tensor([affordance],dtype=torch.float32))[1][0].tolist()
+        feature.insert(0,1.)
+        pred1 = np.matmul(w_val,feature)
+
         v0 = plot_veh_frame[7]
         x0 = plot_veh_frame[2]
         y0 = plot_veh_frame[3]
         y_traj0 = 0*np.linspace(0,T,m)
         # print(pred)
         # print(max(pred))
-        if max(pred)>0.5:
-            for j in range(0,len(pred)):
-                if pred[j]>0.5:
-                    y_traj = y_traj0 + traj_base[j][0:m]+y0
-                    x_traj = traj_base[j][m:]+x0
-                    plt.plot(x_traj,y_traj,'r--',linewidth=1)
-            for k in range(0,len(near_veh)):
-                # print(len(near_veh))
-                if plotted_veh_ID[k] in near_veh_frame[:,1]:
-                    ax.add_patch(near_veh[k])
-            for j in range(0, len(lm)):
-                plt.plot([lm[j], lm[j]], [-10, 1000], 'go--', linewidth=2)
-        else:
-            max_idx = pred.index(max(pred))
-            print(max_idx)
-            y_traj = y_traj0 + traj_base[max_idx][0:m] + y0
-            x_traj = traj_base[max_idx][m:] + x0
-            plt.plot(x_traj, y_traj, 'r--', linewidth=1)
+        # if max(pred)>0.5:
+        for j in range(0,len(pred)):
+            # if pred[j]>offset[j]:            # result using bloating
+            if pred1[j]>0:                     # result using SVM
+                y_traj = y_traj0 + traj_base[j][0:m]+y0
+                x_traj = traj_base[j][m:]+x0
+                plt.plot(x_traj,y_traj,'r--',linewidth=1)
+        for k in range(0,len(near_veh)):
+            # print(len(near_veh))
+            if plotted_veh_ID[k] in near_veh_frame[:,1]:
+                ax.add_patch(near_veh[k])
+        for j in range(0, len(lm)):
+            plt.plot([lm[j], lm[j]], [-10, 1000], 'go--', linewidth=2)
+        # else:
+        #     max_idx = pred.index(max(pred))
+        #     print(max_idx)
+        #     y_traj = y_traj0 + traj_base[max_idx][0:m] + y0
+        #     x_traj = traj_base[max_idx][m:] + x0
+        #     plt.plot(x_traj, y_traj, 'r--', linewidth=1)
 
         ax.axis('equal')
         ax.set_xlim(0, 21.6)
@@ -146,6 +159,10 @@ def animate_scenario(veh_ID,t_min,t_max,frames,lm,aff,traj_base,model):
                                    interval=100,
                                    blit=False, repeat=False)
     plt.show()
+    # Writer = animation.writers['ffmpeg']
+    # writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+    # anim_name = 'anim'+str(veh_ID)+'.mp4'
+    # anim.save(anim_name,writer=writer)
 def main():
 
     data = loadmat('scenarios.mat')
@@ -154,7 +171,7 @@ def main():
     frames = data['frames'][0]
     veh_traj = data['veh_traj_set'][0]
     model = FCNet_new(op_dim=traj_base.shape[0]).to(device)
-    model = torch.load('traj_pred')
+    model = torch.load('traj_pred.pth')
     model.eval()
     duration = np.zeros(veh_traj.shape[0])
     for i in range(0,veh_traj.shape[0]):

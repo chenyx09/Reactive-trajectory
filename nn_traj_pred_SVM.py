@@ -8,14 +8,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 from scipy.io import loadmat
+from scipy.io import savemat
 from torch.utils import data
+import gurobipy as gp
+from gurobipy import GRB
+import csv
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 
 class FCNet(nn.Module):
-    def __init__(self, hidden_1=200, op_dim=17, input_dim=21):
+    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=17, input_dim=21):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_2, op_dim)
@@ -30,7 +34,7 @@ class FCNet(nn.Module):
         return output2, output
 
 class FCNet_new(nn.Module):
-    def __init__(self, hidden_1=100, hidden_2=50, op_dim=17, input_dim=21):
+    def __init__(self, hidden_1=100, hidden_2=30, op_dim=17, input_dim=21):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_1, hidden_2)
@@ -45,6 +49,8 @@ class FCNet_new(nn.Module):
         output2 = self.fc4(output1)
         # output = F.log_softmax(output, dim=1)
         return output2, output
+
+
 
 def loss_function(X,Y):
     coeff = 100*(Y==1) + 5*(Y==0.0)+0.1*(Y==0.01)
@@ -92,26 +98,27 @@ def calc_offset(model,data,target):
     offset,indices = pos_output.min(0)
     return offset
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser = argparse.ArgumentParser(description='PyTorch Example')
 
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--data-path', type=str, default='data.mat',
                         metavar='D', help='.mat file from which to read data')
-    parser.add_argument('--num-epochs',type=int, default=50,
+    parser.add_argument('--num-epochs',type=int, default=10,
                         help='number of epochs to train')
     args = parser.parse_args()
 
     x = loadmat(args.data_path)
     affordance_data = x['training_data']
     output = x['output']
+    N_base = output.shape[1]
     output1 = output+0.01*(output==0)+(output==-1)
     affordance_data = torch.Tensor(affordance_data)
     output = torch.Tensor(output1)
 
     output_shape = output.shape[1]
-
-    model = FCNet_new(op_dim=output_shape).to(device)
+    hidden_layer_size = 30
+    model = FCNet_new(op_dim=output_shape,hidden_2=hidden_layer_size).to(device)
     affordance_dataset = data.TensorDataset(affordance_data, output)
 
     train_data_size = int(0.85*len(affordance_dataset))
@@ -130,17 +137,70 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     # model.load_state_dict(torch.load('traj_pred.pth'))
-    # model = torch.load('traj_pred.pth')
-    test(args=args, model=model, device=device, test_loader=val_loader,
-        epoch=0)
-    for epoch in range(args.num_epochs):
-        train(args=args, model=model, device=device, train_loader=train_loader,
-              optimizer=optimizer, epoch=epoch)
-        test(args=args, model=model, device=device, test_loader=val_loader,
-        epoch=epoch)
+    model = torch.load('traj_pred.pth')
+    # test(args=args, model=model, device=device, test_loader=val_loader,
+    #     epoch=0)
+    # for epoch in range(args.num_epochs):
+    #     train(args=args, model=model, device=device, train_loader=train_loader,
+    #           optimizer=optimizer, epoch=epoch)
+    #     test(args=args, model=model, device=device, test_loader=val_loader,
+    #     epoch=epoch)
+    # torch.save(model, 'traj_pred.pth')
     offset = calc_offset(model,affordance_data,output)
     print(offset)
-    torch.save(model, 'traj_pred.pth')
+    w_size = hidden_layer_size+1
+    w_val = np.zeros([N_base,w_size])
+    # var=[]
+    output_T = np.transpose(output1)
+    for idx in range(0,N_base):
+        p_idx=np.argwhere(output_T[idx]==1)
+        n_idx=np.argwhere(output_T[idx]==0)
+        # p_idx = p_idx[0:100]
+        # n_idx = n_idx[0:100]
+
+        n_neg = len(n_idx)
+        n_pos = len(p_idx)
+        # print(p_idx)
+        # print(output_T)
+        # for i in range(0,w_size):
+        #     var.append('w'+str(i))
+        # w = var
+        # for i in range(0,n_neg):
+        #     var.append('s'+str(i))
+        m = gp.Model("SVM")
+
+        w = m.addVars(w_size,name='w',lb=-100.,ub=100.)
+        m.addConstr(gp.quicksum([w[j]*w[j] for j in range(1,w_size)])<=1.)
+        n_slack = m.addVars(n_neg,lb=-GRB.INFINITY,ub=0.0,name="n_slack")
+        p_slack = m.addVars(n_neg,lb=-0.0,ub=GRB.INFINITY,name="p_slack")
+
+        # obj = gp.quicksum([w[i]*w[i] for i in range(1,w_size)])+n_slack.sum()+p_slack.sum()*1.1
+        obj = n_slack.sum()+p_slack.sum()*1.1
+        m.setObjective(obj)
+
+        for i in range(0,n_pos):
+            feature = model(torch.tensor(affordance_data[p_idx[i]],dtype=torch.float32))[1][0].tolist()
+            feature.insert(0,1.0)
+            m.addConstr(gp.quicksum(w[j]*feature[j] for j in range(0,len(feature)))>=0)
+        for i in range(0,n_neg):
+            feature = model(torch.tensor(affordance_data[n_idx[i]],dtype=torch.float32))[1][0].tolist()
+            feature.insert(0,1.0)
+            m.addConstr(gp.quicksum(w[j]*feature[j] for j in range(0,len(feature)))==n_slack[i]+p_slack[i])
+        m.optimize()
+        print(m.status)
+        for v in m.getVars():
+            if v.varName[0]=='w':
+                if v.varName[3]==']':
+                    idx1 = int(v.varName[2])
+                    w_val[idx][idx1]=v.x
+                elif v.varName[4]==']':
+                    idx1 = int(v.varName[2:4])
+                    # print(idx1)
+                    w_val[idx][idx1]=v.x
+                print('%s %g' % (v.varName, v.x))
+    savemat("SVM_res.mat", {'w_val':w_val})
+
+    # torch.save(model, 'traj_pred.pth')
 
 
 

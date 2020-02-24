@@ -114,25 +114,30 @@ end
 %% remove similar trajectories
 
 %% draw example trajectory
-% idx = [1,2,3,4,5];
-% figure(1)
-% clf
-% hold on
-% % v0 = traj_pool(idx,2*m+1);
-% for n = 1:length(idx)
-% 
-% v0 = 15;
-% y_traj = traj_base(idx(n),1:m)+v0*(0:Ts1:TT);
-% x_traj = traj_base(idx(n),m+1:2*m);
-% cmap = {'r','b','c','m','g'};
-% for i = 1:m
-%     
-%     ellipse(sqrt(delta)/y_scaling(i),sqrt(delta)/x_scaling(i),0,y_traj(i),x_traj(i),cmap{n});
-% end
-% 
-% axis equal
-% 
-% end
+idx = [10];
+x_scaling = (m-1)./(m-1:2*m-2);
+y_scaling = (m-1)./(m-1:2*m-2)/4;
+figure(1)
+clf
+hold on
+% v0 = traj_pool(idx,2*m+1);
+for n = 1:length(idx)
+
+v0 = 15;
+y_traj = traj_base(idx(n),1:m)+v0*(0:Ts1:TT);
+x_traj = traj_base(idx(n),m+1:2*m);
+
+cmap = {'r','b','c','m','g'};
+for i = 1:m
+    plot(y_traj(i),x_traj(i),'b*')
+    ellipse(sqrt(delta)/y_scaling(i),sqrt(delta)/x_scaling(i),0,y_traj(i),x_traj(i),cmap{n});
+end
+plot(y_traj,x_traj,'b')
+plot([-3,60],[-1.8,-1.8],'r','linewidth',1);
+plot([-3,60],[1.8,1.8],'r','linewidth',1);
+axis equal
+
+end
 
 %% draw trajectory base
 figure(2)
@@ -142,8 +147,9 @@ v0=15;
 for i=1:size(traj_base,1)
     y_traj = traj_base(i,1:m)+v0*(0:Ts1:TT);
     x_traj = traj_base(i,m+1:2*m);
-    plot(x_traj,y_traj);
+    plot(x_traj,y_traj,'b');
 end
-plot([-1.8,-1.8],[-3,60]);
-plot([1.8,1.8],[-3,60]);
+plot([-1.8,-1.8],[-3,60],'r','linewidth',1);
+plot([1.8,1.8],[-3,60],'r','linewidth',1);
+draw_rec([0;0],[3.6,2],pi/2,'b')
 axis equal

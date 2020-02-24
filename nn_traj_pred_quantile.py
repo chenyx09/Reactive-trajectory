@@ -15,7 +15,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class FCNet(nn.Module):
-    def __init__(self, hidden_1=200, op_dim=17, input_dim=21):
+    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=17, input_dim=21):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_2, op_dim)
@@ -24,44 +24,41 @@ class FCNet(nn.Module):
 
     def forward(self, x):
         output = F.relu(self.bn1(self.fc1(x)))
-        output1 = self.fc2(output)
-        output2 = self.fc3(output1)
+        output = self.fc2(output)
+        output = self.fc3(output)
         # output = F.log_softmax(output, dim=1)
-        return output2, output
+        return output
 
 class FCNet_new(nn.Module):
-    def __init__(self, hidden_1=100, hidden_2=50, op_dim=17, input_dim=21):
+    def __init__(self, hidden_11=100, hidden_12=100, hidden_2=200, op_dim=17, input_dim=21):
         super().__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_1)
-        self.fc2 = nn.Linear(hidden_1, hidden_2)
-        self.fc3 = nn.Linear(hidden_2, op_dim)
-        self.fc4 = nn.Sigmoid()
-        self.bn1 = nn.BatchNorm1d(hidden_1)
-        self.bn2 = nn.BatchNorm1d(hidden_2)
+        self.fc11 = nn.Linear(input_dim, hidden_11)
+        self.fc12 = nn.Linear(input_dim, hidden_12)
+        self.fc2 = nn.Linear(hidden_2, op_dim)
+        self.fc3 = nn.Sigmoid()
+        self.bn1 = nn.BatchNorm1d(hidden_11)
+        self.bn2 = nn.BatchNorm1d(hidden_12)
+
     def forward(self, x):
-        output = F.relu(self.bn1(self.fc1(x)))
-        output = F.relu(self.bn2(self.fc2(output)))
-        output1 = self.fc3(output)
-        output2 = self.fc4(output1)
+        hidden11 = F.relu(self.bn1(self.fc11(x)))
+        hidden12 = F.tanh(self.bn2(self.fc12(x)))
+        output = self.fc2(torch.cat([hidden11, hidden12], 1))
+        output = self.fc3(output)
         # output = F.log_softmax(output, dim=1)
-        return output2, output
+        return output
 
 def loss_function(X,Y):
     coeff = 100*(Y==1) + 5*(Y==0.0)+0.1*(Y==0.01)
-    coeff1 = 100*(Y==1)
-    coeff2 = 5*(Y==0.0)
-    coeff3 = 0.1*(Y==0.01)
     ### TODO: Need to do normalize across the batch or something?
     # return torch.norm(coeff*(X-Y)**2)
-    return torch.norm(coeff1*torch.relu(0.8-X)+coeff2*torch.relu(X-0.2)+coeff3*torch.relu(X-0.2))
-    # return torch.norm(coeff*(Y*torch.log(X+0.01)+(1.0-Y)*torch.log(1.01-X)))
+    return torch.norm(coeff*(Y*torch.log(X+0.01)+(1.0-Y)*torch.log(1.01-X)))
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
     for batch_idx, (input, target) in enumerate(train_loader):
         input, target = input.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(input)[0]
+        output = model(input)
         loss = loss_function(output, target)
         loss.backward()
         optimizer.step()
@@ -78,7 +75,7 @@ def test(args, model, device, test_loader, epoch):
     with torch.no_grad():
         for input, target in test_loader:
             input, target = input.to(device), target.to(device)
-            output = model(input)[0]
+            output = model(input)
             test_loss += loss_function(output, target).item()  # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
 
@@ -87,7 +84,7 @@ def test(args, model, device, test_loader, epoch):
 
 
 def calc_offset(model,data,target):
-    output = model(data)[0]
+    output = model(data)
     pos_output = (target==1)*output + 10*(target!=1)
     offset,indices = pos_output.min(0)
     return offset
@@ -98,7 +95,7 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--data-path', type=str, default='data.mat',
                         metavar='D', help='.mat file from which to read data')
-    parser.add_argument('--num-epochs',type=int, default=50,
+    parser.add_argument('--num-epochs',type=int, default=20,
                         help='number of epochs to train')
     args = parser.parse_args()
 
@@ -114,8 +111,8 @@ def main():
     model = FCNet_new(op_dim=output_shape).to(device)
     affordance_dataset = data.TensorDataset(affordance_data, output)
 
-    train_data_size = int(0.85*len(affordance_dataset))
-    test_data_size = int(0.1*len(affordance_dataset))
+    train_data_size = int(0.9*len(affordance_dataset))
+    test_data_size = int(0.01*len(affordance_dataset))
     val_data_size = len(affordance_dataset) - train_data_size - test_data_size
 
     #### Use 3 splits if needed by changing here
@@ -129,8 +126,8 @@ def main():
     val_loader =   data.DataLoader(val_data, batch_size = 512)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    # model.load_state_dict(torch.load('traj_pred.pth'))
-    # model = torch.load('traj_pred.pth')
+    # model = torch.load('traj_pred')
+
     test(args=args, model=model, device=device, test_loader=val_loader,
         epoch=0)
     for epoch in range(args.num_epochs):
@@ -138,15 +135,9 @@ def main():
               optimizer=optimizer, epoch=epoch)
         test(args=args, model=model, device=device, test_loader=val_loader,
         epoch=epoch)
+    torch.save(model, 'traj_pred')
     offset = calc_offset(model,affordance_data,output)
     print(offset)
-    torch.save(model, 'traj_pred.pth')
-
-
-
-    ## Get output before sigmoid
-    # new_classifier = nn.Sequential(*list(model.classifier.children())[:-1])
-
 
 
 
