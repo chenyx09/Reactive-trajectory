@@ -1,8 +1,9 @@
-for i=1:size(positive_data_cell{1},1)
-a1 = positive_data_cell{1}(i,30+[2,3,4,6,7,9,10,11,12,14,15])./x_norm;
-a2 = positive_data_cell{1}(i,[2,3,4,6,7,9,10,11,12,14,15])./x_norm;
-pred = traj_predictor(a1',a2');
-if pred(1)<0
-    disp('')
+v_profile=zeros(17,7);
+
+for i=1:size(traj_base,1)
+    
+    for j=2:7
+        v_profile(i,j)=(traj_base(i,j)-traj_base(i,j-1))/0.5;
+    end
 end
-end
+traj_base1 = [traj_base v_profile];
