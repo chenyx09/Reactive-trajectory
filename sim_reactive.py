@@ -21,6 +21,8 @@ from numpy import linalg as LA
 
 data = loadmat('data.mat')
 traj_base = data['traj_base1']
+x = loadmat('offset.mat')
+offset = x['offset'][0]
 Ts = 0.5
 
 # N_lane = 6
@@ -32,6 +34,37 @@ m = 7
 tt = np.arange(0,m)*Ts
 lm = [0,3.6,7.2,10.8,14.4,18,21.6]
 N_base = 17
+class FCNet(nn.Module):
+    def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=17, input_dim=21):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_1)
+        self.fc2 = nn.Linear(hidden_2, op_dim)
+        self.fc3 = nn.Sigmoid()
+        self.bn1 = nn.BatchNorm1d(hidden_1)
+
+    def forward(self, x):
+        output = F.relu(self.bn1(self.fc1(x)))
+        output1 = self.fc2(output)
+        output2 = self.fc3(output1)
+        # output = F.log_softmax(output, dim=1)
+        return output2, output
+
+class FCNet_new(nn.Module):
+    def __init__(self, hidden_1=100, hidden_2=50, op_dim=17, input_dim=21):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_1)
+        self.fc2 = nn.Linear(hidden_1, hidden_2)
+        self.fc3 = nn.Linear(hidden_2, op_dim)
+        self.fc4 = nn.Sigmoid()
+        self.bn1 = nn.BatchNorm1d(hidden_1)
+        self.bn2 = nn.BatchNorm1d(hidden_2)
+    def forward(self, x):
+        output = F.relu(self.bn1(self.fc1(x)))
+        output = F.relu(self.bn2(self.fc2(output)))
+        output1 = self.fc3(output)
+        output2 = self.fc4(output1)
+        # output = F.log_softmax(output, dim=1)
+        return output2, output
 def check_collision(affordance,traj,Ts1,T):
     # 0 Vehicle_ID(i)
     # 1 v_Vel(i)
@@ -159,10 +192,11 @@ class vehicle():
         self.v_traj = fv(t_ts)
 
 class Highway_env():
-    def __init__(self,AV_state=[0,1.8,20,0],N_HV=10,N_lane=6,ts=0.05):
+    def __init__(self,AV_state=[0,1.8,20,0],N_HV=10,N_lane=6,ts=0.05,pred_model=[]):
         self.ts = ts
         self.veh_set = [vehicle(state=AV_state, controlled=True,ts=self.ts)]
         self.N_lane = N_lane
+        self.pred_model = pred_model
         for i in range(0,N_HV):
             lane_number = math.floor(random.random()*N_lane)
             success = False
@@ -183,6 +217,15 @@ class Highway_env():
         for i in range(0,len(self.veh_set)):
             if self.veh_set[i].controlled==True:
                 # controller implementation u[i] = controller(x)
+                x = self.veh_set[i].state
+                idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
+                veh_affordance=calc_affordance(self.veh_set,self.N_lane)
+                for j in range(1,len(self.veh_set)):
+                    traj = traj_base+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
+                    pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
+                # if self.veh_set[0].state[0]==0:
+                #     print(traj)
+                #     print(pred)
                 u[i]=[0,0]
                 self.veh_set[i].controlled_step(u[i])
             else:
@@ -276,9 +319,14 @@ def Highway_sim(env,T):
 
 
 def main():
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     N_lane = 3
-    h=Highway_env(N_HV=5,N_lane=N_lane)
+    model = FCNet_new(op_dim=traj_base.shape[0]).to(device)
+    model = torch.load('traj_pred.pth')
+    model.eval()
+    h=Highway_env(N_HV=5,N_lane=N_lane,pred_model=model)
     veh_affordance=calc_affordance(h.veh_set,h.N_lane)
+    print(veh_affordance.shape)
 
     # print(veh_affordance)
 
