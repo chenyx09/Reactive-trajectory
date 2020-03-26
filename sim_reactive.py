@@ -1,4 +1,5 @@
 import torch
+import pdb
 from affordance import *
 import argparse
 import torchvision.transforms as transforms
@@ -293,7 +294,6 @@ def Highway_sim(env,T):
         state_rec[i][t]=env.veh_set[i].state
     while t<N:
         if t%N_update==0:
-
             veh_affordance=calc_affordance(env.veh_set,env.N_lane)
             TTC_traj_base=np.zeros([len(env.veh_set),N_base])
             safe_traj = [None]*len(env.veh_set)
@@ -301,6 +301,7 @@ def Highway_sim(env,T):
                 for j in range(0,N_base):
                     TTC_traj_base[i][j] = check_collision(veh_affordance[i],traj_base[j][0:2*m],Ts,3)
                 safe_traj[i]=[j for j, x in enumerate(TTC_traj_base[i]) if x==max(TTC_traj_base[i])]
+                # pdb.set_trace()
                 traj_choice = random.choice(safe_traj[i])
                 env.veh_set[i].update_traj(traj_choice)
 
@@ -330,12 +331,13 @@ def main():
 
     # print(veh_affordance)
 
-    state_rec,input_rec=Highway_sim(h,5)
+    state_rec,input_rec=Highway_sim(h,20)
     # state_rec = np.array(state_rec)
     # print(state_rec[1,:,0])
     # print(h.veh_set[1].state)
     # print(state_rec[3])
-
+    for i in range(0,state_rec.shape[0]):
+        np.savetxt("veh"+str(i)+"_sim.csv", np.array(state_rec[i]), delimiter=",")
     animate_scenario(h,state_rec,lm,traj_base)
 
 
