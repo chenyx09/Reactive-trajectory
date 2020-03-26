@@ -19,6 +19,8 @@ from scipy import interpolate
 import random
 import math
 from numpy import linalg as LA
+import pdb
+from ftocp import FTOCP
 
 data = loadmat('data.mat')
 traj_base = data['traj_base1']
@@ -213,6 +215,12 @@ class Highway_env():
                     success = True
 
             self.veh_set.append(vehicle([Y,X,v0,0],controlled=False,traj_idx=0,ts=self.ts))
+
+        # DO TO !: Set N and dt correctly!!!!!
+        N  = 7
+        dt = 0.1
+        self.ftocp = FTOCP(N, dt)
+
     def step(self):
         u=[None]*len(self.veh_set)
         for i in range(0,len(self.veh_set)):
@@ -221,12 +229,44 @@ class Highway_env():
                 x = self.veh_set[i].state
                 idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
                 veh_affordance=calc_affordance(self.veh_set,self.N_lane)
+                pos_pred_x_tot = np.empty((0, 7)); # TO DO replace 7
+                pos_pred_y_tot = np.empty((0, 7));
                 for j in range(1,len(self.veh_set)):
                     traj = traj_base+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
                     pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
+                    
+                    # store predicte trajectory
+                    rel_pos_x  = 0.0
+                    rel_pos_y  = 0.0
+                    pos_pred_x = traj[:,0:7]+rel_pos_x
+                    pos_pred_y = traj[:,7:14]+rel_pos_y
+                    pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
+                    pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
                 # if self.veh_set[0].state[0]==0:
                 #     print(traj)
                 #     print(pred)
+
+
+                print("pos_pred_x shape: ", pos_pred_x_tot.shape)
+                print("pos_pred_y shape: ", pos_pred_y_tot.shape)
+
+                self.ftocp.buildNonlinearProgram(pos_pred_x, pos_pred_y)
+                self.ftocp.solve(x)
+
+
+
+                print("Optimal State Trajectory")
+                print(self.ftocp.xSol.T)
+
+                print("Optimal Input Trajectory")
+                print(self.ftocp.uSol.T)
+
+                if self.ftocp.feasible == 1:
+                	print("MPC problem solved to optimality")
+                
+                pdb.set_trace()
+
+
                 u[i]=[0,0]
                 self.veh_set[i].controlled_step(u[i])
             else:
@@ -321,11 +361,11 @@ def Highway_sim(env,T):
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    N_lane = 3
+    N_lane = 2
     model = FCNet_new(op_dim=traj_base.shape[0]).to(device)
     model = torch.load('traj_pred.pth')
     model.eval()
-    h=Highway_env(N_HV=5,N_lane=N_lane,pred_model=model)
+    h=Highway_env(N_HV=2,N_lane=N_lane,pred_model=model) # number of vehicles
     veh_affordance=calc_affordance(h.veh_set,h.N_lane)
     print(veh_affordance.shape)
 
