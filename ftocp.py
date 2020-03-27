@@ -19,15 +19,15 @@ class FTOCP(object):
 		self.n    = 4
 		self.d    = 2
 		self.vRef = 30
-		self.aEll = 4
-		self.bEll = 1
+		self.aEll = 10.0
+		self.bEll = 3.0
 		
 
 	def solve(self, x0):
 
 		# Set box constraints on states, input and obstacle slack
-		self.lbx = x0.tolist() + [-1000]*(self.n*(self.N)) + [-np.pi/2.0,-1.0]*self.N + [1]*(self.N*self.tr_num)
-		self.ubx = x0.tolist() +  [1000]*(self.n*(self.N)) + [ np.pi/2.0, 1.0]*self.N + [100000]*(self.N*self.tr_num)
+		self.lbx = x0.tolist() + [-1000, 0, -1000, -1000]*(self.N) + [-np.pi/2.0,-5.0]*self.N + [1]*(self.N*self.tr_num)
+		self.ubx = x0.tolist() + [ 1000,10,  1000,  1000]*(self.N) + [ np.pi/2.0, 5.0]*self.N + [100000]*(self.N*self.tr_num)
 		
 
 		# Solve nonlinear programm
@@ -75,9 +75,9 @@ class FTOCP(object):
 		# Defining Cost
 		cost = 0
 		for i in range(0, N):
-			cost = cost + 0.0*X[n*i+0]**2 + 0.0*X[n*i+1]**2 + (X[n*i+2] - self.vRef)**2 + 0.0*X[n*i+3]**2 + U[d*i+0]**2 + U[d*i+1]**2;
+			cost = cost + 0.0*X[n*i+0]**2 + (X[n*i+1]-1.8)**2 + (X[n*i+2] - self.vRef)**2 + 0.0*X[n*i+3]**2 + U[d*i+0]**2 + U[d*i+1]**2;
 		# Terminal cost
-		cost = cost + 0.0*X[n*N+0]**2 + 0.0*X[n*N+1]**2 + (X[n*N+2] - self.vRef)**2 + 0.0*X[n*N+3]**2
+		cost = cost + 0.0*X[n*N+0]**2 + (X[n*N+1]-1.8)**2 + (X[n*N+2] - self.vRef)**2 + 0.0*X[n*N+3]**2
 
 		# Set IPOPT options
 		# opts = {"verbose":False,"ipopt.print_level":0,"print_time":0}#, "ipopt.acceptable_constr_viol_tol":0.001}#,"ipopt.acceptable_tol":1e-4}#, "expand":True}
