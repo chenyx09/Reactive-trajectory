@@ -233,19 +233,21 @@ class Highway_env():
                 pos_pred_x_tot = np.empty((0, self.MPC_N)); # TO DO replace 7
                 pos_pred_y_tot = np.empty((0, self.MPC_N));
                 for j in range(1,len(self.veh_set)):
-                    traj = traj_base+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
-                    pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
 
+                    pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
+                    possible_traj_idx = [i for i in range(len(pred)) if pred[i] > offset[i]]
+                    traj = traj_base[possible_traj_idx]+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
                     # store predicte trajectory
                     rel_pos_x  = self.veh_set[j].state[1]-self.veh_set[0].state[1]
                     rel_pos_y  = self.veh_set[j].state[0]-self.veh_set[0].state[0]
-                    pos_pred_y = traj[:,0:7]+rel_pos_y
-                    pos_pred_x = traj[:,7:14]+rel_pos_x
-                    fy = interpolate.interp1d(tt, pos_pred_y)
-                    fx = interpolate.interp1d(tt, pos_pred_x)
+                    pos_pred_y0 = traj[:,0:7]+rel_pos_y
+                    pos_pred_x0 = traj[:,7:14]+rel_pos_x
+                    fy = interpolate.interp1d(tt, pos_pred_y0)
+                    fx = interpolate.interp1d(tt, pos_pred_x0)
                     t_ts = np.arange(0,3+self.mpc_ts,self.mpc_ts)
                     pos_pred_y = fy(t_ts)
                     pos_pred_x = fx(t_ts)
+                    # pdb.set_trace()
                     pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
                     pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
                 # if self.veh_set[0].state[0]==0:
@@ -272,7 +274,7 @@ class Highway_env():
                 else:
                     print("Error Not Feasible")
                     print([pos_pred_x_tot, pos_pred_y_tot])
-    
+
                     pdb.set_trace()
 
 
