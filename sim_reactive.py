@@ -69,7 +69,7 @@ class FCNet_new(nn.Module):
         # output = F.log_softmax(output, dim=1)
         return output2, output
 def check_collision(affordance,traj,Ts1,T):
-    # 0 Vehicle_ID(i)
+    # 0 lane_ID(i)
     # 1 v_Vel(i)
     # 2 dis2cen
     # 3 fwd_dis
@@ -218,7 +218,7 @@ class Highway_env():
 
         # DO TO !: Set N and dt correctly!!!!!
         N  = 7
-        dt = 0.1
+        dt = 0.05
         self.ftocp = FTOCP(N, dt)
 
     def step(self):
@@ -234,12 +234,12 @@ class Highway_env():
                 for j in range(1,len(self.veh_set)):
                     traj = traj_base+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
                     pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
-                    
+
                     # store predicte trajectory
-                    rel_pos_x  = 0.0
-                    rel_pos_y  = 0.0
-                    pos_pred_x = traj[:,0:7]+rel_pos_x
-                    pos_pred_y = traj[:,7:14]+rel_pos_y
+                    rel_pos_x  = self.veh_set[j].state[1]-self.veh_set[0].state[1]
+                    rel_pos_y  = self.veh_set[j].state[0]-self.veh_set[0].state[0]
+                    pos_pred_y = traj[:,0:7]+rel_pos_y
+                    pos_pred_x = traj[:,7:14]+rel_pos_x
                     pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
                     pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
                 # if self.veh_set[0].state[0]==0:
@@ -263,11 +263,11 @@ class Highway_env():
 
                 if self.ftocp.feasible == 1:
                 	print("MPC problem solved to optimality")
-                
-                pdb.set_trace()
+
+                # pdb.set_trace()
 
 
-                u[i]=[0,0]
+                u[i]=[self.ftocp.uSol[1][0],self.ftocp.uSol[0][0]]
                 self.veh_set[i].controlled_step(u[i])
             else:
                 self.veh_set[i].uncontrolled_step()
@@ -343,6 +343,7 @@ def Highway_sim(env,T):
                 safe_traj[i]=[j for j, x in enumerate(TTC_traj_base[i]) if x==max(TTC_traj_base[i])]
                 # pdb.set_trace()
                 traj_choice = random.choice(safe_traj[i])
+                # pdb.set_trace()
                 env.veh_set[i].update_traj(traj_choice)
 
 
@@ -365,7 +366,7 @@ def main():
     model = FCNet_new(op_dim=traj_base.shape[0]).to(device)
     model = torch.load('traj_pred.pth')
     model.eval()
-    h=Highway_env(N_HV=2,N_lane=N_lane,pred_model=model) # number of vehicles
+    h=Highway_env(N_HV=4,N_lane=N_lane,pred_model=model) # number of vehicles
     veh_affordance=calc_affordance(h.veh_set,h.N_lane)
     print(veh_affordance.shape)
 
