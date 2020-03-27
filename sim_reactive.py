@@ -200,6 +200,7 @@ class Highway_env():
         self.veh_set = [vehicle(state=AV_state, controlled=True,ts=self.ts)]
         self.N_lane = N_lane
         self.pred_model = pred_model
+        self.mpc_ts = 0.2
         for i in range(0,N_HV):
             lane_number = math.floor(random.random()*N_lane)
             success = False
@@ -217,9 +218,9 @@ class Highway_env():
             self.veh_set.append(vehicle([Y,X,v0,0],controlled=False,traj_idx=0,ts=self.ts))
 
         # DO TO !: Set N and dt correctly!!!!!
-        N  = 7
-        dt = 0.05
-        self.ftocp = FTOCP(N, dt)
+        self.MPC_N  = int(3/self.mpc_ts)+1
+
+        self.ftocp = FTOCP(self.MPC_N, self.mpc_ts)
 
     def step(self):
         u=[None]*len(self.veh_set)
@@ -229,8 +230,8 @@ class Highway_env():
                 x = self.veh_set[i].state
                 idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
                 veh_affordance=calc_affordance(self.veh_set,self.N_lane)
-                pos_pred_x_tot = np.empty((0, 61)); # TO DO replace 7
-                pos_pred_y_tot = np.empty((0, 61));
+                pos_pred_x_tot = np.empty((0, self.MPC_N)); # TO DO replace 7
+                pos_pred_y_tot = np.empty((0, self.MPC_N));
                 for j in range(1,len(self.veh_set)):
                     traj = traj_base+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
                     pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
@@ -242,7 +243,7 @@ class Highway_env():
                     pos_pred_x = traj[:,7:14]+rel_pos_x
                     fy = interpolate.interp1d(tt, pos_pred_y)
                     fx = interpolate.interp1d(tt, pos_pred_x)
-                    t_ts = np.arange(0,3+self.ts,self.ts)
+                    t_ts = np.arange(0,3+self.mpc_ts,self.mpc_ts)
                     pos_pred_y = fy(t_ts)
                     pos_pred_x = fx(t_ts)
                     pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
