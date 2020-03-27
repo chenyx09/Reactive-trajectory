@@ -269,6 +269,13 @@ class Highway_env():
 
                 if self.ftocp.feasible == 1:
                 	print("MPC problem solved to optimality")
+                else:
+                    print("Error Not Feasible")
+                    print([pos_pred_x_tot, pos_pred_y_tot])
+    
+                    pdb.set_trace()
+
+
 
                 # pdb.set_trace()
 
