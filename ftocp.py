@@ -33,24 +33,28 @@ class FTOCP(object):
 
 		# Set box constraints on states, input and obstacle slack
 
-		lb_box = [-1000,  0,  0, -np.pi/2] # y, x, v, psi
-		ub_box = [ 1000, 10, 40,  np.pi/2] # y, x, v, psi
-		self.lbx = x0.tolist() + lb_box*(self.N) + [-10,-2000.0]*self.N + [1]*(self.N*self.tr_num)
-		self.ubx = x0.tolist() + ub_box*(self.N) + [ 10, 2000.0]*self.N + [np.inf]*(self.N*self.tr_num)
+		lb_box = [-np.inf,  1.0,  0, -np.pi/2] # y, x, v, psi
+		ub_box = [ np.inf, 50, 40,  np.pi/2] # y, x, v, psi
+		self.lbx = x0.tolist() + lb_box*(self.N) + [-0.4,-2000.0]*self.N + [1]*(self.N*self.tr_num)
+		self.ubx = x0.tolist() + ub_box*(self.N) + [ 0.4, 2000.0]*self.N + [np.inf]*(self.N*self.tr_num)
 		
 
 		# Solve nonlinear programm
-		if self.xGuessTot != []:
-			for i in range(0,self.N):
-				ui = [0.0, -self.xGuessTot[-1][2]/self.dt]
-				uGuess.append(ui)
-				self.xGuessTot.append(self.dynamics_f(self.xGuessTot[-1],ui))
-
-				pdb.set_trace()
-
+		# if self.xGuessTot != []:
+		# 	for i in range(0,self.N):
+		# 		ui = [0.0, -self.xGuessTot[-1][2]/self.dt]
+		# 		uGuess.append(ui)
+		# 		self.xGuessTot.append(self.dynamics_f(self.xGuessTot[-1],ui))
 
 		if self.xGuessTot != []:
 			sol = self.solver(lbx=self.lbx, ubx=self.ubx, lbg=self.lbg_dyanmics, ubg=self.ubg_dyanmics, x0 = self.xGuessTot)
+		else:
+			sol = self.solver(lbx=self.lbx, ubx=self.ubx, lbg=self.lbg_dyanmics, ubg=self.ubg_dyanmics)
+		# sol = self.solver(lbx=self.lbx, ubx=self.ubx, lbg=self.lbg_dyanmics, ubg=self.ubg_dyanmics)
+
+		# Check solution flag
+		if (self.solver.stats()['success']):
+			self.feasible = 1
 		else:
 			sol = self.solver(lbx=self.lbx, ubx=self.ubx, lbg=self.lbg_dyanmics, ubg=self.ubg_dyanmics)
 
@@ -58,7 +62,7 @@ class FTOCP(object):
 		x = np.array(sol["x"])
 		self.xSol  = x[0:(self.N+1)*self.n].reshape((self.N+1,self.n)).T
 		self.uSol  = x[(self.N+1)*self.n:((self.N+1)*self.n + self.d*self.N)].reshape((self.N,self.d)).T
-		self.inVar = x[((self.N+1)*self.n + self.d*self.N):((self.N+1)*self.n + self.d*self.N + ((self.N-1)*self.tr_num) )]
+		self.inVar = x[((self.N+1)*self.n + self.d*self.N):((self.N+1)*self.n + self.d*self.N + (self.N*self.tr_num) )]
 
 		self.xGuessTot = x
 
@@ -96,17 +100,23 @@ class FTOCP(object):
 
 		for j in range(0, self.tr_num ):
 			for i in range(0, N):
-				constraint = vertcat(constraint, ( ( X[n*i+0] - ypred[j,i] )**2/(self.yEll**2) + 
-												   ( X[n*i+1] - xpred[j,i] )**2/(self.xEll**2) - inVar[ j*N + i] ) );
+				constraint = vertcat(constraint, ( ( X[n*i+0] - ypred[j,i] )**2/(i*0.25 + self.yEll**2) + 
+												   ( X[n*i+1] - xpred[j,i] )**2/(i*0.025 + self.xEll**2) - inVar[ j*N + i] ) );
 
 		# Defining Cost
 		cost = 0
+		cost_x   = 0.0
+		cost_v   = 10.0
+		cost_psi = 1000.0
+		cost_acc = 10.0
+		cost_ste = 100.0
 		for i in range(0, N):
-			cost = cost + 0.1*(X[n*i+1]-X[n*(i+1)+1])**2;
-			cost = cost + 0*(X[n*i+1]-1.8)**2 + 0.1*(X[n*i+2] - self.vRef)**2 + X[n*i+3]**2 + U[d*i+0]**2 + 0.1*U[d*i+1]**2;
+			cost = cost + 10*(X[n*i+1]-X[n*(i+1)+1])**2
+			cost = cost + 100*(X[n*i+3]-X[n*(i+1)+3])**2
+			cost = cost + cost_x*(X[n*i+1]-1.8)**2 + cost_v*(X[n*i+2] - self.vRef)**2 + cost_psi*X[n*i+3]**2
+			cost = cost + cost_acc*U[d*i+0]**2 + cost_ste*U[d*i+1]**2;
 		# Terminal cost
-		# cost = cost + 0.01*(X[n*N+1]-1.8)**2 + (X[n*N+2] - self.vRef)**2 + X[n*N+3]**2
-		
+		cost = cost + cost_x*(X[n*N+1]-1.8)**2 + cost_v*(X[n*N+2] - self.vRef)**2 + cost_psi*X[n*N+3]**2 		
 		# Obstacle constraints
 		# for j in range(0, self.tr_num ):
 		# 	for i in range(0, N):

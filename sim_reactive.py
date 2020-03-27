@@ -192,10 +192,10 @@ class vehicle():
         self.state[0] = self.Y_traj[self.t]
         self.state[1] = self.X_traj[self.t]
         self.state[2] = self.v_traj[self.t]
-        print("Update y traj")
-        print(self.Y_traj)
+        # print("Update y traj")
+        # print(self.Y_traj)
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
     def update_traj(self,traj_idx):
         self.t = 0
@@ -214,7 +214,7 @@ class Highway_env():
         self.veh_set = [vehicle(state=AV_state, controlled=True,ts=self.ts)]
         self.N_lane = N_lane
         self.pred_model = pred_model
-        self.mpc_ts = 0.2
+        self.mpc_ts = 0.25
         for i in range(0,N_HV):
             lane_number = math.floor(random.random()*N_lane)
             success = False
@@ -249,7 +249,7 @@ class Highway_env():
                 for j in range(1,len(self.veh_set)):
 
                     pred = self.pred_model(torch.tensor([veh_affordance[j,aff_idx]],dtype=torch.float32))[0][0].tolist()
-                    possible_traj_idx = [i for i in range(len(pred)) if pred[i] > 0.9]#offset[i]]
+                    possible_traj_idx = [i for i in range(len(pred)) if pred[i] > offset[i]]
                     traj = traj_base[possible_traj_idx]#+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
                     # store predicte trajectory
                     pos_pred_y0 = traj[:,0:7]  + self.veh_set[j].state[0] + self.veh_set[j].state[2]*tt
@@ -292,11 +292,11 @@ class Highway_env():
                 tr_idx   = int(np.floor(idx/self.MPC_N))
                 time_idx = idx - tr_idx*self.MPC_N
                 print("idx (tr,time): ", tr_idx, time_idx, " value: ", self.ftocp.inVar[idx], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx], pos_pred_y_tot[tr_idx][time_idx])
-                if time_idx+1<self.MPC_N:
+                if (time_idx+1<self.MPC_N) and (idx+1 < self.ftocp.N*self.ftocp.tr_num):
                     print("idx (tr,time): ", tr_idx, time_idx+1, " value: ", self.ftocp.inVar[idx+1], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx+1],pos_pred_y_tot[tr_idx][time_idx+1])
 
-                print("u predicted")
-                print(pos_pred_y_tot[tr_idx][:])
+                # print("y predicted")
+                # print(pos_pred_y_tot[tr_idx][:])
                 # u[i]=[0.0, 0.0]
                 # self.ftocp.feasible = 1
 
@@ -327,7 +327,10 @@ class Highway_env():
 
                     ax.axis('equal')
                     ax.set_xlim(0, self.N_lane*lane_width)
-                    ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+50)
+                    ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+100)
+                    
+                    print("Optimal State Trajectory")
+                    print(self.ftocp.xSol.T)
 
                     plt.show()
 
