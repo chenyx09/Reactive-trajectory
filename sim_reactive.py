@@ -34,6 +34,7 @@ UB = 30
 LB = -10
 v0 = 20
 m = 7
+aff_idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
 tt = np.arange(0,m)*Ts
 lm = [0,3.6,7.2,10.8,14.4,18,21.6]
 N_base = 17
@@ -68,6 +69,14 @@ class FCNet_new(nn.Module):
         output2 = self.fc4(output1)
         # output = F.log_softmax(output, dim=1)
         return output2, output
+def check_collision_simple(traj1,traj2,L,W,dt):
+    N = len(traj1[0])
+
+    for j in range(0,N):
+        dis = max(abs(traj1[0][j]-traj2[0][j])-L,abs(traj1[1][j]-traj2[1][j])-W)
+        if dis<0.2:
+            return j*dt
+    return 10
 def check_collision(affordance,traj,Ts1,T):
     # 0 lane_ID(i)
     # 1 v_Vel(i)
@@ -233,18 +242,17 @@ class Highway_env():
             if self.veh_set[i].controlled==True:
                 # controller implementation u[i] = controller(x)
                 x = self.veh_set[i].state
-                idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
+                # idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
                 veh_affordance=calc_affordance(self.veh_set,self.N_lane)
                 pos_pred_x_tot = np.empty((0, self.MPC_N)); # TO DO replace 7
                 pos_pred_y_tot = np.empty((0, self.MPC_N));
                 for j in range(1,len(self.veh_set)):
 
-                    pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
+                    pred = self.pred_model(torch.tensor([veh_affordance[j,aff_idx]],dtype=torch.float32))[0][0].tolist()
                     possible_traj_idx = [i for i in range(len(pred)) if pred[i] > 0.9]#offset[i]]
-                    traj = traj_base[possible_traj_idx]+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
-                    
-                    # store predicte trajectory                    
-                    pos_pred_y0 = traj[:,0:7]  + self.veh_set[j].state[0]
+                    traj = traj_base[possible_traj_idx]#+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
+                    # store predicte trajectory
+                    pos_pred_y0 = traj[:,0:7]  + self.veh_set[j].state[0] + self.veh_set[j].state[2]*tt
                     pos_pred_x0 = traj[:,7:14] + self.veh_set[j].state[1]
 
                     fy = interpolate.interp1d(tt, pos_pred_y0)
@@ -256,7 +264,7 @@ class Highway_env():
 
                     pos_pred_y = fy(t_ts)
                     pos_pred_x = fx(t_ts)
-                    
+
                     pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
                     pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
                 # if self.veh_set[0].state[0]==0:
@@ -272,7 +280,7 @@ class Highway_env():
                 print("State x: ", x)
                 self.ftocp.solve(x)
 
-                
+
                 print("Optimal State Trajectory")
                 print(self.ftocp.xSol[:,0:2].T)
 
@@ -286,9 +294,9 @@ class Highway_env():
                 print("idx (tr,time): ", tr_idx, time_idx, " value: ", self.ftocp.inVar[idx], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx], pos_pred_y_tot[tr_idx][time_idx])
                 if time_idx+1<self.MPC_N:
                     print("idx (tr,time): ", tr_idx, time_idx+1, " value: ", self.ftocp.inVar[idx+1], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx+1],pos_pred_y_tot[tr_idx][time_idx+1])
-                
+
                 print("u predicted")
-                print(pos_pred_y_tot[tr_idx][:])    
+                print(pos_pred_y_tot[tr_idx][:])
                 # u[i]=[0.0, 0.0]
                 # self.ftocp.feasible = 1
 
@@ -316,11 +324,11 @@ class Highway_env():
 
                     for jj in range(0, len(lm)):
                         plt.plot([lm[jj], lm[jj]], [-30, 1000], 'go--', linewidth=2)
-            
+
                     ax.axis('equal')
                     ax.set_xlim(0, self.N_lane*lane_width)
                     ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+50)
-                    
+
                     plt.show()
 
                 if self.ftocp.feasible == 1:
@@ -329,7 +337,7 @@ class Highway_env():
                 else:
                     print("Error Not Feasible")
                     print("Size pos_pred_x_tot: ", pos_pred_x_tot.shape)
-                    
+
                     fig = plt.figure()
                     ax = fig.add_subplot(111)
 
@@ -347,14 +355,14 @@ class Highway_env():
 
                     veh_patch = plt.Rectangle((self.veh_set[0].state[1]-veh.v_width/2, self.veh_set[0].state[0]-veh.v_length/2), veh.v_width, veh.v_length, fc='g', zorder=0)
                     ax.add_patch(veh_patch)
-            
+
                     for j in range(0, len(lm)):
                         plt.plot([lm[j], lm[j]], [-30, 1000], 'go--', linewidth=2)
-            
+
                     ax.axis('equal')
                     ax.set_xlim(0, self.N_lane*lane_width)
                     ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+50)
-                    
+
                     if self.ftocp.xPredOld != []:
                         for ii in range(0, self.ftocp.xSol.shape[1]):
                             veh_patch = plt.Rectangle((self.ftocp.xPredOld[1][ii]-veh.v_width/2, self.ftocp.xPredOld[0][ii]-veh.v_length/2), veh.v_width, veh.v_length, fc='y', zorder=0)
@@ -437,13 +445,39 @@ def Highway_sim(env,T):
         if t%N_update==0:
             veh_affordance=calc_affordance(env.veh_set,env.N_lane)
             TTC_traj_base=np.zeros([len(env.veh_set),N_base])
+            TTC_traj_base1=10*np.ones([len(env.veh_set),N_base])
             safe_traj = [None]*len(env.veh_set)
-            for i in range(0,len(env.veh_set)):
+            for i in range(1,len(env.veh_set)):
                 for j in range(0,N_base):
                     TTC_traj_base[i][j] = check_collision(veh_affordance[i],traj_base[j][0:2*m],Ts,3)
-                safe_traj[i]=[j for j, x in enumerate(TTC_traj_base[i]) if x==max(TTC_traj_base[i])]
+                    fy = interpolate.interp1d(tt, traj_base[j][0:m]+env.veh_set[i].state[2]*tt+env.veh_set[i].state[0])
+                    fx = interpolate.interp1d(tt, traj_base[j][m:2*m]+env.veh_set[i].state[1])
+                    t_ts = np.arange(0,3+env.veh_set[i].ts,env.veh_set[i].ts)
+                    Y_traj = fy(t_ts)
+                    X_traj = fx(t_ts)
+                    traj1=[Y_traj,X_traj]
+                    L=env.veh_set[i].v_length
+                    W=env.veh_set[i].v_width
+                    for k in range(1,len(env.veh_set)):
+                        if k!=i:
+                            t2 = env.veh_set[k].t
+                            length = len(env.veh_set[k].Y_traj)-t2
+
+                            traj2 = [env.veh_set[k].Y_traj[t2:t2+length],env.veh_set[k].X_traj[t2:t2+length]]
+                            # pdb.set_trace()
+
+                            TTC_traj_base1[i][j]=min(check_collision_simple([traj1[0][0:length],traj1[1][0:length]],traj2,L,W,env.veh_set[i].ts),TTC_traj_base1[i][j])
+                safe_traj[i]=[j for j, x in enumerate(TTC_traj_base1[i]) if x==max(TTC_traj_base1[i])]
+                pred = env.pred_model(torch.tensor([veh_affordance[i,aff_idx]],dtype=torch.float32))[0][0].tolist()
+                traj_candidate = [j for j, x in enumerate(safe_traj[i]) if pred[x]>0.9]
                 # pdb.set_trace()
-                traj_choice = random.choice(safe_traj[i])
+                if len(traj_candidate)>0:
+                    traj_choice = random.choice(traj_candidate)
+                else:
+                    traj_choice = random.choice(safe_traj[i])
+                # safe_traj[i]=[j for j, x in enumerate(TTC_traj_base[i]) if x==max(TTC_traj_base[i])]
+                # pdb.set_trace()
+
                 # pdb.set_trace()
                 env.veh_set[i].update_traj(traj_choice)
 
