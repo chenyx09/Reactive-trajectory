@@ -166,7 +166,7 @@ def check_collision(affordance,traj,Ts1,T):
 
 
 class vehicle():
-    def __init__(self, state=[0,0,v0,0], controlled=False,traj_idx=0,v_length=4,v_width=2,ts=0.05):
+    def __init__(self, state=[0,0,v0,0], controlled=False,traj_idx=0,v_length=4,v_width=2.4,ts=0.05):
         self.state = np.array(state)
         self.controlled = controlled
         self.ts = ts
@@ -229,8 +229,8 @@ class Highway_env():
                 x = self.veh_set[i].state
                 idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
                 veh_affordance=calc_affordance(self.veh_set,self.N_lane)
-                pos_pred_x_tot = np.empty((0, 7)); # TO DO replace 7
-                pos_pred_y_tot = np.empty((0, 7));
+                pos_pred_x_tot = np.empty((0, 61)); # TO DO replace 7
+                pos_pred_y_tot = np.empty((0, 61));
                 for j in range(1,len(self.veh_set)):
                     traj = traj_base+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
                     pred = self.pred_model(torch.tensor([veh_affordance[j,idx]],dtype=torch.float32))[0][0].tolist()
@@ -240,6 +240,11 @@ class Highway_env():
                     rel_pos_y  = self.veh_set[j].state[0]-self.veh_set[0].state[0]
                     pos_pred_y = traj[:,0:7]+rel_pos_y
                     pos_pred_x = traj[:,7:14]+rel_pos_x
+                    fy = interpolate.interp1d(tt, pos_pred_y)
+                    fx = interpolate.interp1d(tt, pos_pred_x)
+                    t_ts = np.arange(0,3+self.ts,self.ts)
+                    pos_pred_y = fy(t_ts)
+                    pos_pred_x = fx(t_ts)
                     pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
                     pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
                 # if self.veh_set[0].state[0]==0:
@@ -372,7 +377,7 @@ def main():
 
     # print(veh_affordance)
 
-    state_rec,input_rec=Highway_sim(h,20)
+    state_rec,input_rec=Highway_sim(h,10)
     # state_rec = np.array(state_rec)
     # print(state_rec[1,:,0])
     # print(h.veh_set[1].state)
