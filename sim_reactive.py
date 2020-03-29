@@ -183,7 +183,10 @@ class vehicle():
         self.v_width = v_width
         self.update_traj(traj_idx)
     def controlled_step(self,u): # controlled vehicle
+        if self.controlled !=True:
+            pdb.set_trace()
         assert self.controlled==True
+
         dxdt = np.array([self.state[2]*np.cos(self.state[3]),self.state[2]*np.sin(self.state[3]),u[0],u[1]])
         self.state = self.state + dxdt*self.ts
     def uncontrolled_step(self):   #uncontrolled vehicle
@@ -246,34 +249,39 @@ class Highway_env():
                 veh_affordance=calc_affordance(self.veh_set,self.N_lane)
                 pos_pred_x_tot = np.empty((0, self.MPC_N)); # TO DO replace 7
                 pos_pred_y_tot = np.empty((0, self.MPC_N));
-                for j in range(1,len(self.veh_set)):
+                for j in range(0,len(self.veh_set)):
+                    if i!=j and abs(self.veh_set[i].state[0]-self.veh_set[j].state[0])<40\
+                        and self.veh_set[i].state[0]<self.veh_set[j].state[0] and abs(self.veh_set[i].state[1]-self.veh_set[j].state[1])<5:
+                        pred = self.pred_model(torch.tensor([veh_affordance[j,aff_idx]],dtype=torch.float32))[0][0].tolist()
+                        possible_traj_idx = [i for i in range(len(pred)) if pred[i] > offset[i]]
+                        traj = traj_base[possible_traj_idx]#+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
+                        # store predicte trajectory
 
-                    pred = self.pred_model(torch.tensor([veh_affordance[j,aff_idx]],dtype=torch.float32))[0][0].tolist()
-                    possible_traj_idx = [i for i in range(len(pred)) if pred[i] > offset[i]]
-                    traj = traj_base[possible_traj_idx]#+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
-                    # store predicte trajectory
-                    pos_pred_y0 = traj[:,0:7]  + self.veh_set[j].state[0] + self.veh_set[j].state[2]*tt
-                    pos_pred_x0 = traj[:,7:14] + self.veh_set[j].state[1]
+                        pos_pred_y0 = traj[:,0:7]  + self.veh_set[j].state[0] + self.veh_set[j].state[2]*tt
+                        pos_pred_x0 = traj[:,7:14] + self.veh_set[j].state[1]
 
-                    fy = interpolate.interp1d(tt, pos_pred_y0)
-                    fx = interpolate.interp1d(tt, pos_pred_x0)
-                    t_ts = np.arange(0,3+self.mpc_ts,self.mpc_ts)
-                    # pdb.set_trace()
-                    # fy = interpolate.interp1d(tt, traj[0:m]+self.veh_set[j].state[2]*tt+self.veh_set[j].state[0])
-                    # fx = interpolate.interp1d(tt, traj[m:2*m]+self.veh_set[j].state[1])
+                        fy = interpolate.interp1d(tt, pos_pred_y0)
+                        fx = interpolate.interp1d(tt, pos_pred_x0)
+                        t_ts = np.arange(0,3+self.mpc_ts,self.mpc_ts)
+                        # pdb.set_trace()
+                        # fy = interpolate.interp1d(tt, traj[0:m]+self.veh_set[j].state[2]*tt+self.veh_set[j].state[0])
+                        # fx = interpolate.interp1d(tt, traj[m:2*m]+self.veh_set[j].state[1])
 
-                    pos_pred_y = fy(t_ts)
-                    pos_pred_x = fx(t_ts)
+                        pos_pred_y = fy(t_ts)
+                        pos_pred_x = fx(t_ts)
+                        if j==3:
+                            pos_pred_y=pos_pred_y[0:4]
+                            pos_pred_x=pos_pred_x[0:4]
 
-                    pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
-                    pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
+                        pos_pred_x_tot = np.concatenate((pos_pred_x_tot, pos_pred_x), axis=0)
+                        pos_pred_y_tot = np.concatenate((pos_pred_y_tot, pos_pred_y), axis=0)
                 # if self.veh_set[0].state[0]==0:
                 #     print(traj)
                 #     print(pred)
 
-
-                print("pos_pred_x shape: ", pos_pred_x_tot.shape)
-                print("pos_pred_y shape: ", pos_pred_y_tot.shape)
+                #
+                # print("pos_pred_x shape: ", pos_pred_x_tot.shape)
+                # print("pos_pred_y shape: ", pos_pred_y_tot.shape)
 
                 self.ftocp.buildNonlinearProgram(pos_pred_x_tot, pos_pred_y_tot)
 
@@ -281,19 +289,22 @@ class Highway_env():
                 self.ftocp.solve(x)
 
 
-                print("Optimal State Trajectory")
-                print(self.ftocp.xSol[:,0:2].T)
+                # print("Optimal State Trajectory")
+                # print(self.ftocp.xSol[:,0:2].T)
 
                 # print("Optimal Input Trajectory")
                 # print(self.ftocp.uSol.T)
 
-                print("Predicted inVar = (x-x_obs)^2/xEll^2 + (y-y_obs)^2/yEll^2")
-                idx = np.argmin(self.ftocp.inVar)
+                # print("Predicted inVar = (x-x_obs)^2/xEll^2 + (y-y_obs)^2/yEll^2")
+                if len(self.ftocp.inVar)>1:
+                    idx = np.argmin(self.ftocp.inVar)
+                else:
+                    pdb.set_trace()
                 tr_idx   = int(np.floor(idx/self.MPC_N))
                 time_idx = idx - tr_idx*self.MPC_N
-                print("idx (tr,time): ", tr_idx, time_idx, " value: ", self.ftocp.inVar[idx], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx], pos_pred_y_tot[tr_idx][time_idx])
-                if (time_idx+1<self.MPC_N) and (idx+1 < self.ftocp.N*self.ftocp.tr_num):
-                    print("idx (tr,time): ", tr_idx, time_idx+1, " value: ", self.ftocp.inVar[idx+1], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx+1],pos_pred_y_tot[tr_idx][time_idx+1])
+                # print("idx (tr,time): ", tr_idx, time_idx, " value: ", self.ftocp.inVar[idx], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx], pos_pred_y_tot[tr_idx][time_idx])
+                # if (time_idx+1<self.MPC_N) and (idx+1 < self.ftocp.N*self.ftocp.tr_num):
+                #     print("idx (tr,time): ", tr_idx, time_idx+1, " value: ", self.ftocp.inVar[idx+1], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx+1],pos_pred_y_tot[tr_idx][time_idx+1])
 
                 # print("y predicted")
                 # print(pos_pred_y_tot[tr_idx][:])
@@ -328,7 +339,7 @@ class Highway_env():
                     ax.axis('equal')
                     ax.set_xlim(0, self.N_lane*lane_width)
                     ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+100)
-                    
+
                     print("Optimal State Trajectory")
                     print(self.ftocp.xSol.T)
 
@@ -337,6 +348,7 @@ class Highway_env():
                 if self.ftocp.feasible == 1:
                     print("MPC problem solved to optimality")
                     self.ftocp.xPredOld= self.ftocp.xSol
+                    u[i]=[self.ftocp.uSol[1][0],self.ftocp.uSol[0][0]]
                 else:
                     print("Error Not Feasible")
                     print("Size pos_pred_x_tot: ", pos_pred_x_tot.shape)
@@ -347,12 +359,12 @@ class Highway_env():
                     veh_patch = [];
                     veh = self.veh_set[1]
 
-                    for i in range(0, pos_pred_x_tot.shape[0]):
+                    for ii in range(0, pos_pred_x_tot.shape[0]):
                         for j in range(0, pos_pred_x_tot.shape[1]):
                             if j == 0:
-                                veh_patch = plt.Rectangle((pos_pred_x_tot[i][j]-veh.v_width/2, pos_pred_y_tot[i][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='r', zorder=0)
+                                veh_patch = plt.Rectangle((pos_pred_x_tot[ii][j]-veh.v_width/2, pos_pred_y_tot[ii][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='r', zorder=0)
                             else:
-                                veh_patch = plt.Rectangle((pos_pred_x_tot[i][j]-veh.v_width/2, pos_pred_y_tot[i][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='b', zorder=0)
+                                veh_patch = plt.Rectangle((pos_pred_x_tot[ii][j]-veh.v_width/2, pos_pred_y_tot[ii][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='b', zorder=0)
                             ax.add_patch(veh_patch)
 
 
@@ -375,11 +387,12 @@ class Highway_env():
                     print(self.ftocp.xSol[:,:].T)
                     plt.show()
 
-                    pdb.set_trace()
+                    # pdb.set_trace()
+                    u[i] = [0.0,0.0]
 
                 # pdb.set_trace()
 
-                u[i]=[self.ftocp.uSol[1][0],self.ftocp.uSol[0][0]]
+
                 self.veh_set[i].controlled_step(u[i])
             else:
                 self.veh_set[i].uncontrolled_step()
@@ -461,8 +474,10 @@ def Highway_sim(env,T):
                     traj1=[Y_traj,X_traj]
                     L=env.veh_set[i].v_length
                     W=env.veh_set[i].v_width
-                    for k in range(1,len(env.veh_set)):
-                        if k!=i:
+                    for k in range(0,len(env.veh_set)):
+                        if k!=i and abs(env.veh_set[i].state[1]-env.veh_set[k].state[1])<4\
+                        and env.veh_set[i].state[0]<env.veh_set[k].state[0]:
+
                             t2 = env.veh_set[k].t
                             length = len(env.veh_set[k].Y_traj)-t2
 
@@ -504,7 +519,7 @@ def main():
     model = FCNet_new(op_dim=traj_base.shape[0]).to(device)
     model = torch.load('traj_pred.pth')
     model.eval()
-    h=Highway_env(N_HV=1,N_lane=N_lane,pred_model=model) # number of vehicles
+    h=Highway_env(N_HV=4,N_lane=N_lane,pred_model=model) # number of vehicles
     veh_affordance=calc_affordance(h.veh_set,h.N_lane)
     print(veh_affordance.shape)
 

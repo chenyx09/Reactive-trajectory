@@ -18,14 +18,14 @@ class FTOCP(object):
 		self.dt   = dt
 		self.n    = 4
 		self.d    = 2
-		self.vRef = 30
+		self.vRef = 40
 		self.xEll = 3.0
 		self.yEll = 6.0
 
 		self.feasible = 0
 		self.xPredOld =[]
 		self.yPredOld =[]
-		
+
 		self.solOld =[]
 		self.xGuessTot = []
 
@@ -37,7 +37,7 @@ class FTOCP(object):
 		ub_box = [ np.inf, 50, 40,  np.pi/2] # y, x, v, psi
 		self.lbx = x0.tolist() + lb_box*(self.N) + [-0.4,-2000.0]*self.N + [1]*(self.N*self.tr_num)
 		self.ubx = x0.tolist() + ub_box*(self.N) + [ 0.4, 2000.0]*self.N + [np.inf]*(self.N*self.tr_num)
-		
+
 
 		# Solve nonlinear programm
 		# if self.xGuessTot != []:
@@ -71,7 +71,7 @@ class FTOCP(object):
 			self.feasible = 1
 		else:
 			self.feasible = 0
-			pdb.set_trace()
+			# pdb.set_trace()
 
 	def buildNonlinearProgram(self, xpred, ypred):
 		# Define variables
@@ -91,7 +91,7 @@ class FTOCP(object):
 		constraint = []
 		for i in range(0, N):
 			constraint = vertcat(constraint, X[n*(i+1)+0] - (X[n*i+0] + self.dt*(X[n*i+2]*np.cos(X[n*i+3]))) ); # y
-			constraint = vertcat(constraint, X[n*(i+1)+1] - (X[n*i+1] + self.dt*(X[n*i+2]*np.sin(X[n*i+3]))) ); # x 
+			constraint = vertcat(constraint, X[n*(i+1)+1] - (X[n*i+1] + self.dt*(X[n*i+2]*np.sin(X[n*i+3]))) ); # x
 			constraint = vertcat(constraint, X[n*(i+1)+2] - (X[n*i+2] + self.dt*(U[d*i+1])) );                  # v
 			constraint = vertcat(constraint, X[n*(i+1)+3] - (X[n*i+3] + self.dt*(U[d*i+0])) );					# psi
 
@@ -100,8 +100,8 @@ class FTOCP(object):
 
 		for j in range(0, self.tr_num ):
 			for i in range(0, N):
-				constraint = vertcat(constraint, ( ( X[n*i+0] - ypred[j,i] )**2/(i*0.25 + self.yEll**2) + 
-												   ( X[n*i+1] - xpred[j,i] )**2/(i*0.025 + self.xEll**2) - inVar[ j*N + i] ) );
+				constraint = vertcat(constraint, ( ( X[n*i+0] - ypred[j,i] )**2/(i*0.0 + self.yEll**2) +
+												   ( X[n*i+1] - xpred[j,i] )**2/(i*0.0 + self.xEll**2) - inVar[ j*N + i] ) );
 
 		# Defining Cost
 		cost = 0
@@ -116,7 +116,7 @@ class FTOCP(object):
 			cost = cost + cost_x*(X[n*i+1]-1.8)**2 + cost_v*(X[n*i+2] - self.vRef)**2 + cost_psi*X[n*i+3]**2
 			cost = cost + cost_acc*U[d*i+0]**2 + cost_ste*U[d*i+1]**2;
 		# Terminal cost
-		cost = cost + cost_x*(X[n*N+1]-1.8)**2 + cost_v*(X[n*N+2] - self.vRef)**2 + cost_psi*X[n*N+3]**2 		
+		cost = cost + cost_x*(X[n*N+1]-1.8)**2 + cost_v*(X[n*N+2] - self.vRef)**2 + cost_psi*X[n*N+3]**2
 		# Obstacle constraints
 		# for j in range(0, self.tr_num ):
 		# 	for i in range(0, N):
@@ -141,5 +141,4 @@ class FTOCP(object):
 						  x[2] + self.dt*u[1],
 						  x[3] + self.dt*u[0]])
 
-		return xNext.tolist()		
-
+		return xNext.tolist()
