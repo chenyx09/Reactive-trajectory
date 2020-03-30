@@ -38,6 +38,8 @@ aff_idx = [1,2,3,4,7,8,9,10,11,12,13,14,15,16,17,18,23,24,25,26,27]
 tt = np.arange(0,m)*Ts
 lm = [0,3.6,7.2,10.8,14.4,18,21.6]
 N_base = 17
+plotPredictionFlag = True
+
 class FCNet(nn.Module):
     def __init__(self, hidden_1=200, hidden_2=200 ,op_dim=17, input_dim=21):
         super().__init__()
@@ -182,6 +184,8 @@ class vehicle():
         self.v_length = v_length
         self.v_width = v_width
         self.update_traj(traj_idx)
+        self.x_pred = []
+        self.y_pred = []
     def controlled_step(self,u): # controlled vehicle
         if self.controlled !=True:
             pdb.set_trace()
@@ -288,7 +292,8 @@ class Highway_env():
                 print("State x: ", x)
                 self.ftocp.solve(x)
 
-
+                self.veh_set[0].x_pred.append(self.ftocp.xSol[1,:])
+                self.veh_set[0].y_pred.append(self.ftocp.xSol[0,:])
                 # print("Optimal State Trajectory")
                 # print(self.ftocp.xSol[:,0:2].T)
 
@@ -298,10 +303,12 @@ class Highway_env():
                 # print("Predicted inVar = (x-x_obs)^2/xEll^2 + (y-y_obs)^2/yEll^2")
                 if len(self.ftocp.inVar)>1:
                     idx = np.argmin(self.ftocp.inVar)
+                    tr_idx   = int(np.floor(idx/self.MPC_N))
+                    time_idx = idx - tr_idx*self.MPC_N
                 else:
-                    pdb.set_trace()
-                tr_idx   = int(np.floor(idx/self.MPC_N))
-                time_idx = idx - tr_idx*self.MPC_N
+                    print("No other vehicles")
+                    # pdb.set_trace()
+                
                 # print("idx (tr,time): ", tr_idx, time_idx, " value: ", self.ftocp.inVar[idx], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx], pos_pred_y_tot[tr_idx][time_idx])
                 # if (time_idx+1<self.MPC_N) and (idx+1 < self.ftocp.N*self.ftocp.tr_num):
                 #     print("idx (tr,time): ", tr_idx, time_idx+1, " value: ", self.ftocp.inVar[idx+1], "Pred (x,y): ",pos_pred_x_tot[tr_idx][time_idx+1],pos_pred_y_tot[tr_idx][time_idx+1])
@@ -418,9 +425,15 @@ def animate_scenario(env,state_rec,lm,traj_base):
     for j in range(0, len(lm)):
         plt.plot([lm[j], lm[j]], [-30, 1000], 'go--', linewidth=2)
 
+    pred_tr_patch = []
+    if plotPredictionFlag == True:
+        for ii in range(1, env.ftocp.xSol.shape[1]):
+            pred_tr_patch.append(plt.Rectangle((env.veh_set[0].x_pred[0][ii]-veh.v_width/2, env.veh_set[0].y_pred[0][ii]-veh.v_length/2), veh.v_width, veh.v_length, fc='y', zorder=0))
+        for patch in pred_tr_patch:
+            ax.add_patch(patch)
 
 
-    def animate(t,veh_patch,state_rec,env):
+    def animate(t,veh_patch,state_rec,env,pred_tr_patch):
         N_veh = len(state_rec)
         ego_y = state_rec[0][t][0]
         ax.clear()
@@ -431,6 +444,11 @@ def animate_scenario(env,state_rec,lm,traj_base):
         for j in range(0, len(lm)):
             plt.plot([lm[j], lm[j]], [-10, 1000], 'go--', linewidth=2)
 
+        if plotPredictionFlag == True:
+            for ii in range(1, env.ftocp.xSol.shape[1]):
+                pred_tr_patch[ii-1].set_xy([env.veh_set[0].x_pred[t][ii]-veh.v_width/2, env.veh_set[0].y_pred[t][ii]-veh.v_length/2])
+                ax.add_patch(pred_tr_patch[ii-1])
+
         ax.axis('equal')
         ax.set_xlim(0, env.N_lane*lane_width)
         ax.set_ylim(ego_y-10, ego_y+50)
@@ -440,7 +458,7 @@ def animate_scenario(env,state_rec,lm,traj_base):
         # print(len(ax.patches))
         # print(len(plotted_veh_ID))
         return veh_patch
-    anim = animation.FuncAnimation(fig, animate, fargs=(veh_patch,state_rec,env,),
+    anim = animation.FuncAnimation(fig, animate, fargs=(veh_patch,state_rec,env,pred_tr_patch,),
                                    frames=nframe,
                                    interval=50,
                                    blit=False, repeat=False)

@@ -19,8 +19,15 @@ class FTOCP(object):
 		self.n    = 4
 		self.d    = 2
 		self.vRef = 40
-		self.xEll = 3.0
-		self.yEll = 6.0
+		self.xEll = 3.5
+		self.yEll = 7.0
+
+		self.slackCost = 100*np.ones(N)
+		self.slackCost[0] = 1000*self.slackCost[0]
+		self.slackCost[1] = 500*self.slackCost[1]
+		self.slackCost[2] = 100*self.slackCost[2]
+		self.slackCost[3] = 50*self.slackCost[3]
+		self.slackCost[4] = 10*self.slackCost[4]
 
 		self.feasible = 0
 		self.xPredOld =[]
@@ -35,8 +42,8 @@ class FTOCP(object):
 
 		lb_box = [-np.inf,  1.0,  0, -np.pi/2] # y, x, v, psi
 		ub_box = [ np.inf, 50, 40,  np.pi/2] # y, x, v, psi
-		self.lbx = x0.tolist() + lb_box*(self.N) + [-0.4,-2000.0]*self.N + [1]*(self.N*self.tr_num)
-		self.ubx = x0.tolist() + ub_box*(self.N) + [ 0.4, 2000.0]*self.N + [np.inf]*(self.N*self.tr_num)
+		self.lbx = x0.tolist() + lb_box*(self.N) + [-0.4,-2000.0]*self.N + [1]*(self.N*self.tr_num)      + [-np.inf]*self.N
+		self.ubx = x0.tolist() + ub_box*(self.N) + [ 0.4, 2000.0]*self.N + [np.inf]*(self.N*self.tr_num) + [ np.inf]*self.N
 
 
 		# Solve nonlinear programm
@@ -63,6 +70,7 @@ class FTOCP(object):
 		self.xSol  = x[0:(self.N+1)*self.n].reshape((self.N+1,self.n)).T
 		self.uSol  = x[(self.N+1)*self.n:((self.N+1)*self.n + self.d*self.N)].reshape((self.N,self.d)).T
 		self.inVar = x[((self.N+1)*self.n + self.d*self.N):((self.N+1)*self.n + self.d*self.N + (self.N*self.tr_num) )]
+		self.slack = x[((self.N+1)*self.n + self.d*self.N + (self.N*self.tr_num) ):((self.N+1)*self.n + self.d*self.N + (self.N*self.tr_num) + self.N)]
 
 		self.xGuessTot = x
 
@@ -86,6 +94,7 @@ class FTOCP(object):
 		X     = SX.sym('X', n*(N+1));
 		U     = SX.sym('X', d*N);
 		inVar = SX.sym('X', N*self.tr_num);
+		slack = SX.sym('X', N);
 
 		# Define dynamic constraints
 		constraint = []
@@ -100,12 +109,12 @@ class FTOCP(object):
 
 		for j in range(0, self.tr_num ):
 			for i in range(0, N):
-				constraint = vertcat(constraint, ( ( X[n*i+0] - ypred[j,i] )**2/(i*0.0 + self.yEll**2) +
-												   ( X[n*i+1] - xpred[j,i] )**2/(i*0.0 + self.xEll**2) - inVar[ j*N + i] ) );
+				constraint = vertcat(constraint, ( ( X[n*i+0] - ypred[j,i] )**2/(i*1.5/N + self.yEll**2) +
+												   ( X[n*i+1] - xpred[j,i] )**2/(i*0.5/N + self.xEll**2) - inVar[ j*N + i] + slack[i] ) );
 
 		# Defining Cost
 		cost = 0
-		cost_x   = 0.0
+		cost_x   = 1.0
 		cost_v   = 10.0
 		cost_psi = 1000.0
 		cost_acc = 10.0
@@ -118,15 +127,14 @@ class FTOCP(object):
 		# Terminal cost
 		cost = cost + cost_x*(X[n*N+1]-1.8)**2 + cost_v*(X[n*N+2] - self.vRef)**2 + cost_psi*X[n*N+3]**2
 		# Obstacle constraints
-		# for j in range(0, self.tr_num ):
-		# 	for i in range(0, N):
-		# 		cost = cost + 1/((inVar[ j*N + i] - 1 ))**2;
+		for j in range(0, N):
+			cost = cost + self.slackCost[j] * slack[j]**2;
 
 		# Set IPOPT options
 		# opts = {"verbose":False,"ipopt.print_level":0,"print_time":0}#, "ipopt.acceptable_constr_viol_tol":0.001}#,"ipopt.acceptable_tol":1e-4}#, "expand":True}
 		# opts = {"verbose":False,"ipopt.print_level":0,"print_time":0,"ipopt.mu_strategy":"adaptive"}#, "ipopt.acceptable_constr_viol_tol":0.001}#,"ipopt.acceptable_tol":1e-4}#, "expand":True}
 		opts = {"verbose":False,"ipopt.print_level":0,"print_time":0,"ipopt.mu_strategy":"adaptive","ipopt.mu_init":1e-5,"ipopt.mu_min":1e-15,"ipopt.barrier_tol_factor":1}#, "ipopt.acceptable_constr_viol_tol":0.001}#,"ipopt.acceptable_tol":1e-4}#, "expand":True}
-		nlp = {'x':vertcat(X,U, inVar), 'f':cost, 'g':constraint}
+		nlp = {'x':vertcat(X,U, inVar, slack), 'f':cost, 'g':constraint}
 		self.solver = nlpsol('solver', 'ipopt', nlp, opts)
 
 		# Set lower bound of inequality constraint to zero to force: 1) n*N state dynamics and 2) inequality constraints (set to zero as we have slack)
