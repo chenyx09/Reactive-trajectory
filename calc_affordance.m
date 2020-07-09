@@ -1,3 +1,5 @@
+import pdb
+
 function veh_affordance = calc_affordance(frame)
 
 veh_affordance=[];
@@ -59,7 +61,7 @@ end
                         right_free_lb = M;
                     end
                 end
-                
+
                 j=1;
                 while j<=size(obs1,1)-1
                     if obs1(j+1,1)-obs1(j,2)>min_free_space
@@ -72,7 +74,7 @@ end
                     end
                 end
                 right_free_fwd = obs1(j,2)-Y;
-     
+
             else
                 right_free_ub = M;
                 right_free_fwd = 0;
@@ -115,7 +117,7 @@ end
                         right_free_lb = M;
                     end
                 end
-                
+
                 j=1;
                 while j<=size(obs1,1)-1
                     if obs1(j+1,1)-obs1(j,2)>min_free_space
@@ -128,7 +130,7 @@ end
                     end
                 end
                 right_free_fwd = obs1(j,2)-Y;
-     
+
             else
                 right_free_ub = M;
                 right_free_fwd = 0;
@@ -141,7 +143,7 @@ end
             if ~isempty(obs2)
                     right_dis_rear = min(right_dis_rear,obs2(end,3)-X-W/2);
             end
-            
+
             obs1 = obs{lane_ID-1}(obs{lane_ID-1}(:,2)>Y,:);
             obs2 = obs{lane_ID-1}(obs{lane_ID-1}(:,2)<Y,:);
             left_dis_front = 3.6;
@@ -159,7 +161,7 @@ end
                         left_free_lb = M;
                     end
                 end
-                
+
                 j=1;
                 while j<=size(obs1,1)-1
                     if obs1(j+1,1)-obs1(j,2)>min_free_space
@@ -172,7 +174,7 @@ end
                     end
                 end
                 left_free_fwd = obs1(j,2)-Y;
-     
+
             else
                 left_free_ub = M;
                 left_free_fwd = 0;
@@ -203,7 +205,7 @@ end
             right_free_ub = 0;
             right_free_lb = 0;
             right_free_fwd = M;
-            
+
             obs1 = obs{lane_ID-1}(obs{lane_ID-1}(:,2)>Y,:);
             obs2 = obs{lane_ID-1}(obs{lane_ID-1}(:,2)<Y,:);
             left_dis_front = 3.6;
@@ -223,7 +225,7 @@ end
                         left_free_lb = M;
                     end
                 end
-                
+
                 j=1;
                 while j<=size(obs1,1)-1
                     if obs1(j+1,1)-obs1(j,2)>min_free_space
@@ -236,7 +238,7 @@ end
                     end
                 end
                 left_free_fwd = obs1(j,2)-Y;
-     
+
             else
                 left_free_ub = M;
                 left_free_fwd = 0;
@@ -264,13 +266,10 @@ veh_affordance = array2table(veh_affordance,'VariableNames',{'Vehicle_ID','v_Vel
 % hold on
 % for i=1:size(frame,1)
 %     draw_rec([frame.Local_X(i),frame.Local_Y(i)-frame.v_length(i)/2],[frame.v_Width(i) frame.v_length(i)],0,'b');
-%     
+%
 %     text(frame.Local_X(i)+frame.v_Width(i)/2,frame.Local_Y(i)-frame.v_length(i)/2,num2str(frame.Vehicle_ID(i)),'HorizontalAlignment','right')
 % end
 % for i=1:length(lm)
 %     plot([lm(i),lm(i)],[0,500],'r--')
 % end
 % axis equal
-
-            
-        

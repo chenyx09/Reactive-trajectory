@@ -1,4 +1,5 @@
 import numpy as np
+import pdb
 lane_width = 3.6
 
 
@@ -131,7 +132,7 @@ def calc_affordance(veh_set,N_lane=6):
                 right_rear_vel = 0
                 right_rear_L = 0
 
-        elif lane_ID>1 and lane_ID<N_lane-1:
+        elif lane_ID>=1 and lane_ID<N_lane-1:
 
             if obs[lane_ID].any():
                 obs1=obs[lane_ID][obs[lane_ID][:,1]>Y]
@@ -317,7 +318,8 @@ def calc_affordance(veh_set,N_lane=6):
                 left_rear_vel = 0
                 left_rear_L = 0
 
-
+        if 'fwd_dis' not in locals():
+            pdb.set_trace()
         veh_affordance[i] = [lane_ID, v0, dis2cen, fwd_dis, fwd_vel, rear_dis, rear_vel, left_front_Y,
                             left_front_X, left_front_vel, left_rear_Y, left_rear_X, left_rear_vel,
                              right_front_Y, right_front_X, right_front_vel, right_rear_Y, right_rear_X,

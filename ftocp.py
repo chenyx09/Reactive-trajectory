@@ -12,19 +12,21 @@ class FTOCP(object):
 		- buildNonlinearProgram: builds the nonlinear program solved by the above solve methos
 		- model: given x_t and u_t computes x_{t+1} = Ax_t + Bu_t
 	"""
-	def __init__(self, N, dt):
+	def __init__(self, N, dt,N_lane):
 		# Define variables
 		self.N    = N
 		self.dt   = dt
 		self.n    = 4
 		self.d    = 2
 		self.vRef = 40
+		self.xRef = 5.4
 		self.xEll = 3.5
 		self.yEll = 7.0
+		self.N_lane = N_lane
 
-		self.slackCost = 100*np.ones(N)
+		self.slackCost = 1000*np.ones(N)
 		self.slackCost[0] = 1000*self.slackCost[0]
-		self.slackCost[1] = 500*self.slackCost[1]
+		self.slackCost[1] = 400*self.slackCost[1]
 		self.slackCost[2] = 100*self.slackCost[2]
 		self.slackCost[3] = 50*self.slackCost[3]
 		self.slackCost[4] = 10*self.slackCost[4]
@@ -41,9 +43,9 @@ class FTOCP(object):
 		# Set box constraints on states, input and obstacle slack
 
 		lb_box = [-np.inf,  1.0,  0, -np.pi/2] # y, x, v, psi
-		ub_box = [ np.inf, 50, 40,  np.pi/2] # y, x, v, psi
-		self.lbx = x0.tolist() + lb_box*(self.N) + [-0.4,-2000.0]*self.N + [1]*(self.N*self.tr_num)      + [-np.inf]*self.N
-		self.ubx = x0.tolist() + ub_box*(self.N) + [ 0.4, 2000.0]*self.N + [np.inf]*(self.N*self.tr_num) + [ np.inf]*self.N
+		ub_box = [ np.inf, 3.6*self.N_lane-1, 40,  np.pi/2] # y, x, v, psi
+		self.lbx = x0.tolist() + lb_box*(self.N) + [-2000.0,-0.4]*self.N + [1]*(self.N*self.tr_num)      + [-np.inf]*self.N
+		self.ubx = x0.tolist() + ub_box*(self.N) + [ 2000.0, 0.4]*self.N + [np.inf]*(self.N*self.tr_num) + [ np.inf]*self.N
 
 
 		# Solve nonlinear programm
@@ -101,9 +103,10 @@ class FTOCP(object):
 		for i in range(0, N):
 			constraint = vertcat(constraint, X[n*(i+1)+0] - (X[n*i+0] + self.dt*(X[n*i+2]*np.cos(X[n*i+3]))) ); # y
 			constraint = vertcat(constraint, X[n*(i+1)+1] - (X[n*i+1] + self.dt*(X[n*i+2]*np.sin(X[n*i+3]))) ); # x
-			constraint = vertcat(constraint, X[n*(i+1)+2] - (X[n*i+2] + self.dt*(U[d*i+1])) );                  # v
-			constraint = vertcat(constraint, X[n*(i+1)+3] - (X[n*i+3] + self.dt*(U[d*i+0])) );					# psi
-
+			constraint = vertcat(constraint, X[n*(i+1)+2] - (X[n*i+2] + self.dt*(U[d*i+0])) );                  # v
+			constraint = vertcat(constraint, X[n*(i+1)+3] - (X[n*i+3] + self.dt*(U[d*i+1])) );					# psi
+		# for i in range(0,N):
+		# 	constraint = vertcat(constraint,X(n*i+1)
 
 		# Obstacle constraints
 
@@ -114,15 +117,15 @@ class FTOCP(object):
 
 		# Defining Cost
 		cost = 0
-		cost_x   = 1.0
-		cost_v   = 10.0
-		cost_psi = 1000.0
+		cost_x   = 0.5
+		cost_v   = 0.5
+		cost_psi = 500.0
 		cost_acc = 10.0
 		cost_ste = 100.0
 		for i in range(0, N):
 			cost = cost + 10*(X[n*i+1]-X[n*(i+1)+1])**2
 			cost = cost + 100*(X[n*i+3]-X[n*(i+1)+3])**2
-			cost = cost + cost_x*(X[n*i+1]-1.8)**2 + cost_v*(X[n*i+2] - self.vRef)**2 + cost_psi*X[n*i+3]**2
+			cost = cost + cost_x*(X[n*i+1]-self.xRef)**2 + cost_v*(X[n*i+2] - self.vRef)**2 + cost_psi*X[n*i+3]**2
 			cost = cost + cost_acc*U[d*i+0]**2 + cost_ste*U[d*i+1]**2;
 		# Terminal cost
 		cost = cost + cost_x*(X[n*N+1]-1.8)**2 + cost_v*(X[n*N+2] - self.vRef)**2 + cost_psi*X[n*N+3]**2
