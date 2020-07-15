@@ -377,42 +377,42 @@ class Highway_env():
                     self.ftocp.xPredOld= self.ftocp.xSol
                     u[i]=[self.ftocp.uSol[0][0],self.ftocp.uSol[1][0]]
                 else:
-                    print("Error Not Feasible")
-                    print("Size pos_pred_x_tot: ", pos_pred_x_tot.shape)
-
-                    fig = plt.figure()
-                    ax = fig.add_subplot(111)
-
-                    veh_patch = [];
-                    veh = self.veh_set[1]
-
-                    for ii in range(0, pos_pred_x_tot.shape[0]):
-                        for j in range(0, pos_pred_x_tot.shape[1]):
-                            if j == 0:
-                                veh_patch = plt.Rectangle((pos_pred_x_tot[ii][j]-veh.v_width/2, pos_pred_y_tot[ii][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='r', zorder=0)
-                            else:
-                                veh_patch = plt.Rectangle((pos_pred_x_tot[ii][j]-veh.v_width/2, pos_pred_y_tot[ii][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='b', zorder=0)
-                            ax.add_patch(veh_patch)
-
-
-                    veh_patch = plt.Rectangle((self.veh_set[0].state[1]-veh.v_width/2, self.veh_set[0].state[0]-veh.v_length/2), veh.v_width, veh.v_length, fc='g', zorder=0)
-                    ax.add_patch(veh_patch)
-
-                    for j in range(0, len(lm)):
-                        plt.plot([lm[j], lm[j]], [-30, 1000], 'go--', linewidth=2)
-
-                    ax.axis('equal')
-                    ax.set_xlim(0, self.N_lane*lane_width)
-                    ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+50)
-
-                    if self.ftocp.xPredOld != []:
-                        for ii in range(0, self.ftocp.xSol.shape[1]):
-                            veh_patch = plt.Rectangle((self.ftocp.xPredOld[1][ii]-veh.v_width/2, self.ftocp.xPredOld[0][ii]-veh.v_length/2), veh.v_width, veh.v_length, fc='y', zorder=0)
-                            ax.add_patch(veh_patch)
-
-                    print("Old OPT")
-                    print(self.ftocp.xSol[:,:].T)
-                    plt.show()
+                    # print("Error Not Feasible")
+                    # print("Size pos_pred_x_tot: ", pos_pred_x_tot.shape)
+                    #
+                    # fig = plt.figure()
+                    # ax = fig.add_subplot(111)
+                    #
+                    # veh_patch = [];
+                    # veh = self.veh_set[1]
+                    #
+                    # for ii in range(0, pos_pred_x_tot.shape[0]):
+                    #     for j in range(0, pos_pred_x_tot.shape[1]):
+                    #         if j == 0:
+                    #             veh_patch = plt.Rectangle((pos_pred_x_tot[ii][j]-veh.v_width/2, pos_pred_y_tot[ii][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='r', zorder=0)
+                    #         else:
+                    #             veh_patch = plt.Rectangle((pos_pred_x_tot[ii][j]-veh.v_width/2, pos_pred_y_tot[ii][j]-veh.v_length/2), veh.v_width, veh.v_length, fc='b', zorder=0)
+                    #         ax.add_patch(veh_patch)
+                    #
+                    #
+                    # veh_patch = plt.Rectangle((self.veh_set[0].state[1]-veh.v_width/2, self.veh_set[0].state[0]-veh.v_length/2), veh.v_width, veh.v_length, fc='g', zorder=0)
+                    # ax.add_patch(veh_patch)
+                    #
+                    # for j in range(0, len(lm)):
+                    #     plt.plot([lm[j], lm[j]], [-30, 1000], 'go--', linewidth=2)
+                    #
+                    # ax.axis('equal')
+                    # ax.set_xlim(0, self.N_lane*lane_width)
+                    # ax.set_ylim(self.veh_set[0].state[0]-10, self.veh_set[0].state[0]+50)
+                    #
+                    # if self.ftocp.xPredOld != []:
+                    #     for ii in range(0, self.ftocp.xSol.shape[1]):
+                    #         veh_patch = plt.Rectangle((self.ftocp.xPredOld[1][ii]-veh.v_width/2, self.ftocp.xPredOld[0][ii]-veh.v_length/2), veh.v_width, veh.v_length, fc='y', zorder=0)
+                    #         ax.add_patch(veh_patch)
+                    #
+                    # print("Old OPT")
+                    # print(self.ftocp.xSol[:,:].T)
+                    # plt.show()
 
                     # pdb.set_trace()
                     u[i] = [0.0,0.0]
@@ -558,12 +558,19 @@ def Highway_sim(env,T):
                     safe_traj[i]=[j for j, x in enumerate(TTC_traj_base1[i]) if x==max(TTC_traj_base1[i])]
                     # pdb.set_trace()
                     pred = env.pred_model(torch.tensor([veh_affordance[i,aff_idx]],dtype=torch.float32))[0][0].tolist()
-                    traj_candidate = [j for j, x in enumerate(safe_traj[i]) if pred[x]>0.9]
+                    # pdb.set_trace()
+                    safe_pred = [pred[k]-offset[k] for k in safe_traj[i]]
+                    idx = np.argmax(np.array(safe_pred))
+                    traj_candidate = [j for j, x in enumerate(safe_traj[i]) if pred[x]>offset[x]]
                     # pdb.set_trace()
                     if len(traj_candidate)>0:
                         traj_choice = random.choice(traj_candidate)
                     else:
                         traj_choice = random.choice(safe_traj[i])
+
+                    # traj_choice = safe_traj[i][idx]
+
+
                     # safe_traj[i]=[j for j, x in enumerate(TTC_traj_base[i]) if x==max(TTC_traj_base[i])]
                     # pdb.set_trace()
 
@@ -578,7 +585,7 @@ def Highway_sim(env,T):
 
         t=t+1
     # state_rec = np.array(state_rec)
-    return state_rec,input_rec,collision
+    return state_rec,input_rec,collision,t
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 N_lane = 3
@@ -589,10 +596,11 @@ model.eval()
 def reactive_MPC_trial(n):
     print("test number ",n)
     h=Highway_env(N_HV=random.choice([2,3,4,5]),N_lane=N_lane,pred_model=model)
-    state_rec,input_rec,collision=Highway_sim(h,15)
+    state_rec,input_rec,collision,t=Highway_sim(h,10)
     if collision:
         print("collision")
-    return int(collision)
+    # pdb.set_trace()
+    return t
 
 
 def main():
@@ -606,12 +614,15 @@ def main():
     # number of vehicles
     # veh_affordance=calc_affordance(h.veh_set,h.N_lane)
     # print(veh_affordance.shape)
-    pool = multiprocessing.Pool(processes=16)
-    data = pool.map(reactive_MPC_trial, range(500))
+
+
+    pool = multiprocessing.Pool(processes=7)
+    data = pool.map(reactive_MPC_trial, range(200))
     pool.close()
     pool.join()
     print('done')
-    print("Total collision case: ",sum(data))
+    # print("Total collision case: ",sum(data))
+    # reactive_MPC_trial(1)
     pdb.set_trace()
 
 
@@ -620,11 +631,11 @@ def main():
     #     print("test ",i)
     #     print("collision count: ",coll_count)
     #     h=Highway_env(N_HV=random.choice([2,3,4,5,6]),N_lane=N_lane,pred_model=model)
-    #     state_rec,input_rec,collision=Highway_sim(h,15)
+    #     state_rec,input_rec,collision,t=Highway_sim(h,15)
     #     if collision:
     #         coll_count = coll_count+1
     # h=Highway_env(N_HV=4,N_lane=N_lane,pred_model=model)
-    # state_rec,input_rec,collision=Highway_sim(h,15)
+    # state_rec,input_rec,collision,t=Highway_sim(h,15)
     # animate_scenario(h,state_rec,lm,traj_base,[])
 
 

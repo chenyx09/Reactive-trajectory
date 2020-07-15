@@ -20,8 +20,8 @@ class FTOCP(object):
 		self.d    = 2
 		self.vRef = 40
 		self.xRef = 5.4
-		self.xEll = 3.5
-		self.yEll = 7.0
+		self.xEll = 3.6
+		self.yEll = 9.0
 		self.N_lane = N_lane
 
 		self.slackCost = 1000*np.ones(N)
@@ -119,9 +119,9 @@ class FTOCP(object):
 		cost = 0
 		cost_x   = 0.5
 		cost_v   = 0.5
-		cost_psi = 500.0
+		cost_psi = 200.0
 		cost_acc = 10.0
-		cost_ste = 100.0
+		cost_ste = 50.0
 		for i in range(0, N):
 			cost = cost + 10*(X[n*i+1]-X[n*(i+1)+1])**2
 			cost = cost + 100*(X[n*i+3]-X[n*(i+1)+3])**2
