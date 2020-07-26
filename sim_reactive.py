@@ -194,6 +194,7 @@ class vehicle():
         self.update_traj(traj_idx)
         self.x_pred = []
         self.y_pred = []
+        self.psi_pred = []
         self.obs_rec_x = []
         self.obs_rec_y = []
     def controlled_step(self,u): # controlled vehicle
@@ -271,8 +272,8 @@ class Highway_env():
                 pos_pred_x_tot = np.empty((0, self.MPC_N)); # TO DO replace 7
                 pos_pred_y_tot = np.empty((0, self.MPC_N));
                 for j in range(0,len(self.veh_set)):
-                    if i!=j and abs(self.veh_set[i].state[0]-self.veh_set[j].state[0])<40 and abs(self.veh_set[i].state[1]-self.veh_set[j].state[1])<5\
-                        and not (self.veh_set[i].state[0]>self.veh_set[j].state[0]+2 and abs(self.veh_set[i].state[1]-self.veh_set[j].state[1])<3):
+                    if i!=j and abs(self.veh_set[i].state[0]-self.veh_set[j].state[0])<40 and abs(self.veh_set[i].state[1]-self.veh_set[j].state[1])<5:
+                        # and not (self.veh_set[i].state[0]>self.veh_set[j].state[0]+2 and abs(self.veh_set[i].state[1]-self.veh_set[j].state[1])<3):
                         pred = self.pred_model(torch.tensor([veh_affordance[j,aff_idx]],dtype=torch.float32))[0][0].tolist()
                         possible_traj_idx = [i for i in range(len(pred)) if pred[i] > offset[i]]
                         traj = traj_base[possible_traj_idx]#+np.concatenate((np.arange(0,m)*self.veh_set[j].state[2],np.zeros(2*m)))
@@ -312,8 +313,7 @@ class Highway_env():
 
                 self.ftocp.solve(x)
 
-                self.veh_set[0].x_pred.append(self.ftocp.xSol[1,:])
-                self.veh_set[0].y_pred.append(self.ftocp.xSol[0,:])
+
                 # print("Optimal State Trajectory")
                 # print(self.ftocp.xSol[:,0:2].T)
 
@@ -340,6 +340,7 @@ class Highway_env():
 
                 plotFlag = False
                 if (plotFlag == True) and (self.ftocp.feasible == 1):
+
                     fig = plt.figure()
                     ax = fig.add_subplot(111)
 
@@ -373,10 +374,17 @@ class Highway_env():
                     plt.show()
 
                 if self.ftocp.feasible == 1:
+                    self.veh_set[0].x_pred.append(self.ftocp.xSol[1,:])
+                    self.veh_set[0].y_pred.append(self.ftocp.xSol[0,:])
+                    self.veh_set[0].psi_pred.append(self.ftocp.xSol[3,:])
                     # print("MPC problem solved to optimality")
                     self.ftocp.xPredOld= self.ftocp.xSol
                     u[i]=[self.ftocp.uSol[0][0],self.ftocp.uSol[1][0]]
                 else:
+                    # print('infeasible')
+                    self.veh_set[0].x_pred.append(None)
+                    self.veh_set[0].y_pred.append(None)
+                    self.veh_set[0].psi_pred.append(None)
                     # print("Error Not Feasible")
                     # print("Size pos_pred_x_tot: ", pos_pred_x_tot.shape)
                     #
@@ -431,8 +439,7 @@ class Highway_env():
 def animate_scenario(env,state_rec,lm,traj_base,output):
     if output:
         matplotlib.use("Agg")
-    fig = plt.figure()
-    plt.xlim(0, env.N_lane*lane_width)
+    fig = plt.figure(figsize=((4+lane_width*env.N_lane)/5,10))
     ax = fig.add_subplot(111)
     plt.grid()
 
@@ -444,13 +451,13 @@ def animate_scenario(env,state_rec,lm,traj_base,output):
         veh_patch.append(plt.Rectangle((veh.state[1]-veh.v_width/2, veh.state[0]-veh.v_length/2), veh.v_width, veh.v_length, fc='b', zorder=0))
     for patch in veh_patch:
         ax.add_patch(patch)
-    for j in range(0, len(lm)):
-        plt.plot([lm[j], lm[j]], [-30, 1000], 'go--', linewidth=2)
+    # for j in range(0, len(lm)):
+    #     plt.plot([lm[j], lm[j]], [-30, 1000], 'go--', linewidth=2)
 
     pred_tr_patch = []
     if plotPredictionFlag == True:
         for ii in range(1, env.ftocp.xSol.shape[1]):
-            pred_tr_patch.append(plt.Rectangle((env.veh_set[0].x_pred[0][ii]-veh.v_width/2, env.veh_set[0].y_pred[0][ii]-veh.v_length/2), veh.v_width, veh.v_length, fc='y', zorder=0))
+            pred_tr_patch.append(plt.Rectangle((env.veh_set[0].x_pred[0][ii]-veh.v_width/2, env.veh_set[0].y_pred[0][ii]-veh.v_length/2), veh.v_width, veh.v_length, fc='r',alpha=0.3, zorder=0))
         for patch in pred_tr_patch:
             ax.add_patch(patch)
 
@@ -459,26 +466,40 @@ def animate_scenario(env,state_rec,lm,traj_base,output):
         N_veh = len(state_rec)
         ego_y = state_rec[0][t][0]
         ax.clear()
+        ax.set_xlim(-2, lane_width*env.N_lane+2)
+        ax.set_ylim(ego_y-15, ego_y+35)
+        ts = ax.transData
         for i in range(0,N_veh):
+            coords = ts.transform([state_rec[i][t][1],state_rec[i][t][0]])
+            tr = matplotlib.transforms.Affine2D().rotate_around(coords[0], coords[1], -state_rec[i][t][3])
+            te = ts + tr
             veh_patch[i].set_xy([state_rec[i][t][1]-env.veh_set[i].v_width/2,state_rec[i][t][0]-env.veh_set[i].v_length/2])
+            veh_patch[i].set_transform(te)
             ax.add_patch(veh_patch[i])
 
         for j in range(0, env.N_lane+1):
             plt.plot([lm[j], lm[j]], [-10, 1000], 'go--', linewidth=2)
 
         if plotPredictionFlag == True:
-
-            for ii in range(1, env.ftocp.xSol.shape[1]):
-                pred_tr_patch[ii-1].set_xy([env.veh_set[0].x_pred[t][ii]-veh.v_width/2, env.veh_set[0].y_pred[t][ii]-veh.v_length/2])
-                ax.add_patch(pred_tr_patch[ii-1])
+            if env.veh_set[0].x_pred[t] is not None:
+                for ii in range(1, env.ftocp.xSol.shape[1]):
+                    # coords = ts.transform([state_rec[i][t][1],state_rec[i][t][0]])
+                    # tr = matplotlib.transforms.Affine2D().rotate_around(coords[0], coords[1], -state_rec[i][t][3])
+                    # te= ts + tr
+                    pred_tr_patch[ii-1].set_xy([env.veh_set[0].x_pred[t][ii]-veh.v_width/2, env.veh_set[0].y_pred[t][ii]-veh.v_length/2])
+                    coords = ts.transform([env.veh_set[0].x_pred[t][ii],env.veh_set[0].y_pred[t][ii]])
+                    tr = matplotlib.transforms.Affine2D().rotate_around(coords[0], coords[1], -env.veh_set[0].psi_pred[t][ii])
+                    te = ts + tr
+                    pred_tr_patch[ii-1].set_transform(te)
+                    ax.add_patch(pred_tr_patch[ii-1])
             # for ii in range(0,len(env.veh_set[0].obs_rec_x[t])):
             #     for jj in range(0,len(env.veh_set[0].obs_rec_x[t][ii])):
             #         obs_patch = plt.Rectangle((env.veh_set[0].obs_rec_x[t][ii][jj]-veh.v_width/2, env.veh_set[0].obs_rec_y[t][ii][jj]-veh.v_length/2), veh.v_width, veh.v_length, fc='m', zorder=0)
             #         ax.add_patch(obs_patch)
 
-        ax.axis('equal')
-        ax.set_xlim(0, env.N_lane*lane_width)
-        ax.set_ylim(ego_y-10, ego_y+50)
+        # ax.axis('equal')
+        # ax.set_xlim(0, env.N_lane*lane_width)
+        # ax.set_ylim(ego_y-10, ego_y+50)
 
 
         # return near_veh
@@ -489,19 +510,22 @@ def animate_scenario(env,state_rec,lm,traj_base,output):
                                    frames=nframe,
                                    interval=50,
                                    blit=False, repeat=False)
-    plt.show()
+
+
     if output:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
         anim_name = output
         anim.save(anim_name,writer=writer)
+    else:
+        plt.show()
 
 def Highway_sim(env,T):
     N_veh = len(env.veh_set)
-    collision = False
+    collision = 0  # 0 for no collision, 1 for normal collision, and 2 for rear hit
     ts = env.ts
     t=0
-    Ts_update = 0.5
+    Ts_update = 0.3
     N_update = int(round(Ts_update/ts))
     N = int(round(T/ts))
     state_rec = np.zeros([N_veh,N,4])
@@ -511,12 +535,17 @@ def Highway_sim(env,T):
     L=env.veh_set[0].v_length
     W=env.veh_set[0].v_width
     while t<N:
-        if not collision:
+        if collision==0:
             for i in range(1,N_veh):
                 dis = max(abs(env.veh_set[0].state[0]-env.veh_set[i].state[0])-L,abs(env.veh_set[0].state[1]-env.veh_set[i].state[1])-W)
                 if dis<0:
                     # pdb.set_trace()
-                    collision = True
+
+                    if abs(env.veh_set[0].state[1]-env.veh_set[i].state[1])<env.veh_set[0].v_width and env.veh_set[0].state[0]>env.veh_set[i].state[0]:
+                        collision = 2
+                    else:
+                        collision = 1
+
         else:
             break
 
@@ -579,6 +608,8 @@ def Highway_sim(env,T):
 
 
         u=env.step()
+        if len(env.veh_set[0].x_pred)!=t+1:
+            pdb.set_trace()
         input_rec[t]=u[0]
         for i in range(0,len(env.veh_set)):
             state_rec[i][t]=env.veh_set[i].state
@@ -595,10 +626,15 @@ model.eval()
 
 def reactive_MPC_trial(n):
     print("test number ",n)
-    h=Highway_env(N_HV=random.choice([2,3,4,5]),N_lane=N_lane,pred_model=model)
-    state_rec,input_rec,collision,t=Highway_sim(h,10)
-    if collision:
+    h=Highway_env(N_HV=random.choice([2,3,4,5,6,7]),N_lane=N_lane,pred_model=model)
+    state_rec,input_rec,collision,t=Highway_sim(h,20)
+    if collision==1:
         print("collision")
+        animate_scenario(h,state_rec,lm,traj_base,"failure"+str(n)+".mp4")
+    elif collision ==2:
+        print("rear hit")
+        animate_scenario(h,state_rec,lm,traj_base,"rear_hit"+str(n)+".mp4")
+
     # pdb.set_trace()
     return t
 
@@ -616,27 +652,33 @@ def main():
     # print(veh_affordance.shape)
 
 
-    pool = multiprocessing.Pool(processes=7)
+## statistical study of collision rate
+
+    pool = multiprocessing.Pool(processes=16)
     data = pool.map(reactive_MPC_trial, range(200))
     pool.close()
     pool.join()
     print('done')
-    # print("Total collision case: ",sum(data))
-    # reactive_MPC_trial(1)
+    
     pdb.set_trace()
 
+## Single simulation with animation
 
-    # coll_count = 0;
-    # for i in range(0,1000):
-    #     print("test ",i)
-    #     print("collision count: ",coll_count)
-    #     h=Highway_env(N_HV=random.choice([2,3,4,5,6]),N_lane=N_lane,pred_model=model)
-    #     state_rec,input_rec,collision,t=Highway_sim(h,15)
-    #     if collision:
-    #         coll_count = coll_count+1
-    # h=Highway_env(N_HV=4,N_lane=N_lane,pred_model=model)
-    # state_rec,input_rec,collision,t=Highway_sim(h,15)
-    # animate_scenario(h,state_rec,lm,traj_base,[])
+    # h=Highway_env(N_HV=5,N_lane=N_lane,pred_model=model)
+    # state_rec,input_rec,collision,t=Highway_sim(h,10)
+    # animate_scenario(h,state_rec,lm,traj_base,'MPC_movie1.mp4')
+
+    # h=Highway_env(N_HV=5,N_lane=N_lane,pred_model=model)
+    # state_rec,input_rec,collision,t=Highway_sim(h,10)
+    # animate_scenario(h,state_rec,lm,traj_base,'MPC_movie2.mp4')
+
+    # h=Highway_env(N_HV=5,N_lane=N_lane,pred_model=model)
+    # state_rec,input_rec,collision,t=Highway_sim(h,10)
+    # animate_scenario(h,state_rec,lm,traj_base,'MPC_movie3.mp4')
+
+    # h=Highway_env(N_HV=5,N_lane=N_lane,pred_model=model)
+    # state_rec,input_rec,collision,t=Highway_sim(h,10)
+    # animate_scenario(h,state_rec,lm,traj_base,'MPC_movie4.mp4')
 
 
 

@@ -20,13 +20,13 @@ class FTOCP(object):
 		self.d    = 2
 		self.vRef = 40
 		self.xRef = 5.4
-		self.xEll = 3.6
-		self.yEll = 9.0
+		self.xEll = 3.5
+		self.yEll = 8
 		self.N_lane = N_lane
 
-		self.slackCost = 1000*np.ones(N)
-		self.slackCost[0] = 1000*self.slackCost[0]
-		self.slackCost[1] = 400*self.slackCost[1]
+		self.slackCost = 2000*np.ones(N)
+		self.slackCost[0] = 400*self.slackCost[0]
+		self.slackCost[1] = 200*self.slackCost[1]
 		self.slackCost[2] = 100*self.slackCost[2]
 		self.slackCost[3] = 50*self.slackCost[3]
 		self.slackCost[4] = 10*self.slackCost[4]
@@ -101,8 +101,8 @@ class FTOCP(object):
 		# Define dynamic constraints
 		constraint = []
 		for i in range(0, N):
-			constraint = vertcat(constraint, X[n*(i+1)+0] - (X[n*i+0] + self.dt*(X[n*i+2]*np.cos(X[n*i+3]))) ); # y
-			constraint = vertcat(constraint, X[n*(i+1)+1] - (X[n*i+1] + self.dt*(X[n*i+2]*np.sin(X[n*i+3]))) ); # x
+			constraint = vertcat(constraint, X[n*(i+1)+0] - (X[n*i+0] + self.dt*(X[n*i+2]*casadi.cos(X[n*i+3]))) ); # y
+			constraint = vertcat(constraint, X[n*(i+1)+1] - (X[n*i+1] + self.dt*(X[n*i+2]*casadi.sin(X[n*i+3]))) ); # x
 			constraint = vertcat(constraint, X[n*(i+1)+2] - (X[n*i+2] + self.dt*(U[d*i+0])) );                  # v
 			constraint = vertcat(constraint, X[n*(i+1)+3] - (X[n*i+3] + self.dt*(U[d*i+1])) );					# psi
 		# for i in range(0,N):
@@ -117,11 +117,11 @@ class FTOCP(object):
 
 		# Defining Cost
 		cost = 0
-		cost_x   = 0.5
-		cost_v   = 0.5
-		cost_psi = 200.0
-		cost_acc = 10.0
-		cost_ste = 50.0
+		cost_x   = 1
+		cost_v   = 2
+		cost_psi = 100.0
+		cost_acc = 5.0
+		cost_ste = 20.0
 		for i in range(0, N):
 			cost = cost + 10*(X[n*i+1]-X[n*(i+1)+1])**2
 			cost = cost + 100*(X[n*i+3]-X[n*(i+1)+3])**2
